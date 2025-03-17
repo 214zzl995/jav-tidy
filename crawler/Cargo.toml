@@ -1,0 +1,26 @@
+[package]
+name = "crawler"
+version = "0.1.0"
+authors.workspace = true
+description.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+scraper = "0.19.0"
+serde = {workspace = true, features = ["derive"]}
+pest = "2.5.6"
+pest_derive = "2.5.6" 
+regex = {workspace = true}
+thiserror = {workspace = true}
+serde_yaml = "0.9.34"
+serde_json = "1.0"
+reqwest = { version = "0.11.9", features = ["json", "blocking"] }
+toml_edit = { version = "0.19.14", features = ["serde"] }
+
+[dev-dependencies]
+

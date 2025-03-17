@@ -1,0 +1,78 @@
+// Define the character set
+inner                    = _{ whitespace ~ (param | dynamic_param) ~ whitespace }
+inner_can_null_param     = _{ inner | "\"\"" }
+inner_static_param       = _{ whitespace ~ param ~ whitespace }
+param                    = ${ "\"" ~ double_quote_char+ ~ "\"" | "'" ~ single_quote_char+ ~ "'" }
+dynamic_param            =  { "${" ~ dynamic_quote_char+ ~ "}" }
+dynamic_quote_char       = _{ "\\" ~ escape_sequence | line_continuation | !("$" | "{" | "}" | "\"" | "'" | " ") ~ char_literal }
+single_quote_char        = _{
+    "\\" ~ escape_sequence
+  | line_continuation
+  | !"'" ~ char_literal
+}
+double_quote_char        = _{
+    "\\" ~ escape_sequence
+  | line_continuation
+  | !"\"" ~ char_literal
+}
+escape_sequence          = _{
+    char_escape_sequence
+  | nul_escape_sequence
+  | "x" ~ hex_escape_sequence
+  | "u" ~ unicode_escape_sequence
+}
+char_escape_sequence     = @{ single_escape_char | non_escape_char }
+single_escape_char       = _{ "'" | "\"" | "\\" | "b" | "f" | "n" | "r" | "t" | "v" }
+non_escape_char          = _{ !(escape_char | line_terminator) ~ ANY }
+escape_char              = _{ single_escape_char | ASCII_DIGIT | "x" | "u" }
+line_terminator          = _{ "\u{000A}" | "\u{000D}" | "\u{2028}" | "\u{2029}" }
+nul_escape_sequence      = @{ "0" }
+hex_escape_sequence      = @{ ASCII_HEX_DIGIT{2} }
+unicode_escape_sequence  = @{ ASCII_HEX_DIGIT{4} }
+line_continuation        = _{ "\\" ~ line_terminator_sequence }
+line_terminator_sequence = _{ "\u{000D}" ~ "\u{000A}" | line_terminator }
+char_literal             = @{ !("\\" | line_terminator) ~ ANY }
+digit                    = @{ whitespace ~ ASCII_DIGIT+ ~ whitespace }
+whitespace               = _{ " "* }
+
+// Define the Function
+selector = { ^"selector" ~ "(" ~ (inner_static_param | "") ~ ")" }
+parent   = { ^"parent" ~ "(" ~ (digit | "") ~ ")" }
+prev     = { ^"prev" ~ "(" ~ (digit | "") ~ ")" }
+nth      = { ^"nth" ~ "(" ~ (digit | "") ~ ")" }
+
+replace   = { ^"replace" ~ "(" ~ inner ~ "," ~ inner_can_null_param ~ ")" }
+uppercase = { ^"uppercase" ~ "(" ~ ")" }
+lowercase = { ^"lowercase()" }
+insert    = { ^"insert" ~ "(" ~ digit ~ "," ~ inner ~ ")" }
+prepend   = { ^"prepend" ~ "(" ~ inner ~ ")" }
+append    = { ^"append" ~ "(" ~ inner ~ ")" }
+delete    = { ^"delete" ~ "(" ~ inner ~ ")" }
+
+regex  = { ^"regex" ~ "(" ~ inner_static_param ~ ")" }
+equals = { ^"equals" ~ "(" ~ inner ~ ")" }
+
+html = { ^"html()" }
+attr = { ^"attr" ~ "(" ~ inner ~ ")" }
+val  = { ^"val()" }
+
+// Define the Script Type
+selector_rule  = _{ selector | parent | prev | nth }
+transform_rule = _{ replace | uppercase | lowercase | insert | prepend | append | delete }
+condition_rule = _{ equals | regex }
+accessor_rule  = _{ html | attr | val }
+
+element_access_selector_rig_chain = _{ "." ~ accessor_rule ~ ("." ~ transform_rule)* ~ "." ~ condition_rule }
+element_access_selector_chain     = _{ selector_rule ~ element_access_selector_rig_chain? }
+
+element_access_accessor_rig_chain = _{ ("." ~ transform_rule)* ~ "." ~ condition_rule }
+element_access_accessor_chain     = _{ accessor_rule ~ element_access_accessor_rig_chain }
+
+element_access_chain = _{ element_access_selector_chain | element_access_accessor_chain }
+element_access_multi = _{ element_access_chain ~ ("." ~ element_access_selector_chain)* }
+
+value_access_chain = _{ (element_access_multi ~ ".")? ~ accessor_rule }
+
+element_access =  { SOI ~ element_access_multi ~ EOI }
+value_access   =  { SOI ~ value_access_chain ~ ("." ~ transform_rule)* ~ EOI }
+script         = _{ SOI ~ (element_access | value_access) ~ EOI }

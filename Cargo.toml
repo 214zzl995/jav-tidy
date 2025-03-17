@@ -1,0 +1,53 @@
+[workspace]
+members = [
+  ".",
+  "runner",
+  "crawler",
+  "crawler-derive",
+]
+
+[workspace.package]
+authors = ["wei"]
+description = ""
+edition = "2021"
+license = ""
+publish = false
+repository = ""
+
+[workspace.dependencies]
+serde = { version = "*", features = ["derive"] }
+thiserror = "= 1.0.58"
+regex = "*"
+anyhow = { version = "1.0" }
+chrono = "= 0.4.38"
+dashmap = "5"
+futures-util = "0.3.21"
+parking_lot = "0.12"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1.4", features = ["v4", "fast-rng", "macro-diagnostics"] }
+runner = { path = "runner" }
+crawler = { path = "crawler" }
+crawler-derive = { path = "crawler-derive" }
+log = "0.4"
+
+[profile.release]
+codegen-units = 1
+debug = false
+lto = "thin"
+opt-level = "s"
+panic = "abort"
+
+[package]
+name = "jav-tidy-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+serde = {workspace = true, features = ["derive"]}
+regex = { workspace = true }
+config = "0.14.0"
+structopt = "0.3"
+flexi_logger = "0.27"
+log = { workspace = true }
