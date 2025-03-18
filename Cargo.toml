@@ -1,9 +1,11 @@
 [workspace]
 members = [
-  ".",
-  "runner",
-  "crawler",
-  "crawler-derive",
+    ".",
+    "runner",
+    "crawler",
+    "crawler-derive",
+    "crawler-py",
+    "plugin_api",
 ]
 
 [workspace.package]
@@ -29,6 +31,7 @@ runner = { path = "runner" }
 crawler = { path = "crawler" }
 crawler-derive = { path = "crawler-derive" }
 log = "0.4"
+pyo3 = "0.24.0"
 
 [profile.release]
 codegen-units = 1
@@ -45,7 +48,7 @@ edition = "2021"
 [dependencies]
 anyhow = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-serde = {workspace = true, features = ["derive"]}
+serde = { workspace = true, features = ["derive"] }
 regex = { workspace = true }
 config = "0.14.0"
 structopt = "0.3"
