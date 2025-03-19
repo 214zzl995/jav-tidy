@@ -4,8 +4,6 @@ members = [
     "runner",
     "crawler",
     "crawler-derive",
-    "crawler-py",
-    "plugin_api",
 ]
 
 [workspace.package]
