@@ -1,5 +1,6 @@
 mod args;
 mod config;
+mod file;
 
 use std::path::Path;
 
@@ -13,13 +14,19 @@ use structopt::StructOpt;
 async fn main() {
     log_init().unwrap();
     let start_param = args::StartParam::from_args_safe();
-    let config = match config::AppConfig::new(start_param.unwrap().config_file) {
-        Ok(config) => config,
-        Err(e) => {
-            log::error!("Failed to load config: {}", e);
-            return;
-        }
-    };
+
+    if let Err(e) = config::AppConfig::initial(start_param.unwrap().config_file) {
+        log::error!("Failed to parse arguments: {}", e);
+        return;
+    }
+
+    let config = config::get_config();
+
+    // let (tx, rx) = tokio::sync::mpsc::channel(8);
+
+
+
+
 }
 
 fn log_init() -> anyhow::Result<()> {
@@ -48,5 +55,3 @@ fn log_init() -> anyhow::Result<()> {
         .start()?;
     Ok(())
 }
-
-
