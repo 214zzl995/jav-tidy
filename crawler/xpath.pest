@@ -1,0 +1,82 @@
+// XPath 1.0 Grammar for Pest Parser
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+
+// Main entry point - allow paths to start directly
+xpath = _{ SOI ~ (expr) ~ EOI }
+
+// Core expressions
+expr = { SOI ~ or_expr ~ EOI }
+
+or_expr = { and_expr ~ (or_op ~ and_expr)* }
+or_op = { "or" }
+
+and_expr = { equality_expr ~ (and_op ~ equality_expr)* }
+and_op = { "and" }
+
+equality_expr = { relational_expr ~ (equality_op ~ relational_expr)* }
+equality_op = { "=" | "!=" }
+
+relational_expr = { additive_expr ~ (relational_op ~ additive_expr)* }
+relational_op = { "<" | ">" | "<=" | ">=" }
+
+additive_expr = { multiplicative_expr ~ (additive_op ~ multiplicative_expr)* }
+additive_op = { "+" | "-" }
+
+multiplicative_expr = { unary_expr ~ (multiplicative_op ~ unary_expr)* }
+multiplicative_op = { "*" | "div" | "mod" }
+
+unary_expr = { ("-")* ~ union_expr }
+
+union_expr = { path_expr ~ ("|" ~ path_expr)* }
+
+path_expr = { filter_expr ~ ("/" ~ relative_location_path | "//" ~ relative_location_path)? | location_path }
+
+filter_expr = { primary_expr ~ predicate* }
+
+primary_expr = { variable_reference | "(" ~ expr ~ ")" | literal | number | function_call }
+
+// Location paths
+location_path = { absolute_location_path | relative_location_path }
+
+absolute_location_path = { "/" ~ relative_location_path? | "//" ~ relative_location_path }
+
+relative_location_path = { step ~ ("/" ~ step | "//" ~ step)* }
+
+step = { axis_specifier? ~ node_test ~ predicate* | "." | ".." }
+
+axis_specifier = { axis_name ~ "::" | abbreviated_axis_specifier }
+axis_name = {
+    "ancestor" | "ancestor-or-self" | "attribute" | "child" | "descendant" |
+    "descendant-or-self" | "following" | "following-sibling" | "namespace" |
+    "parent" | "preceding" | "preceding-sibling" | "self"
+}
+abbreviated_axis_specifier = { "@" }
+
+node_test = { name_test | node_type ~ "(" ~ ")" | processing_instruction ~ "(" ~ literal? ~ ")" }
+name_test = { "*" | ncname ~ ":" ~ "*" | qname }
+node_type = { "comment" | "text" | "processing-instruction" | "node" }
+processing_instruction = { "processing-instruction" }
+
+predicate = { "[" ~ expr ~ "]" }
+
+// Literals and basic components
+literal = ${ "\"" ~ inner_quoted_string ~ "\"" | "'" ~ inner_apos_string ~ "'" }
+inner_quoted_string = @{ (!("\"") ~ ANY)* }
+inner_apos_string = @{ (!("'") ~ ANY)* }
+
+number = @{ integer | decimal }
+integer = @{ ASCII_DIGIT+ }
+decimal = @{ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT* | "." ~ ASCII_DIGIT+ }
+
+function_call = { function_name ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }
+function_name = @{ qname }
+
+variable_reference = { "$" ~ qname }
+
+// Names according to XML spec
+qname = @{ prefix ~ ":" ~ local_part | local_part }
+prefix = @{ ncname }
+local_part = @{ ncname }
+ncname = @{ name_start_char ~ name_char* }
+name_start_char = @{ ASCII_ALPHA | "_" }
+name_char = @{ ASCII_ALPHANUMERIC | "_" | "-" | "." | ASCII_DIGIT }
