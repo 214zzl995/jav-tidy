@@ -29,7 +29,7 @@ runner = { path = "runner" }
 crawler = { path = "crawler" }
 crawler-derive = { path = "crawler-derive" }
 log = "0.4"
-pyo3 = "0.24.0"
+
 
 [profile.release]
 codegen-units = 1
@@ -58,3 +58,4 @@ notify = { version = "6.1.1", default-features = false, features = [
 file-id = "0.2.1"
 walkdir = "2"
 parking_lot = { workspace = true }
+fd-lock = "4.0.4"

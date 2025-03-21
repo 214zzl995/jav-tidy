@@ -4,6 +4,7 @@ mod file;
 
 use std::path::Path;
 
+use anyhow::Ok;
 use flexi_logger::{
     colored_detailed_format, Age, Cleanup, Criterion, Duplicate, FileSpec, Logger, Naming,
     WriteMode,
@@ -11,22 +12,18 @@ use flexi_logger::{
 use structopt::StructOpt;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     log_init().unwrap();
     let start_param = args::StartParam::from_args_safe();
 
-    if let Err(e) = config::AppConfig::initial(start_param.unwrap().config_file) {
-        log::error!("Failed to parse arguments: {}", e);
-        return;
-    }
+    let config = config::AppConfig::new(start_param.unwrap().config_file)?;
 
-    let config = config::get_config();
-
-    // let (tx, rx) = tokio::sync::mpsc::channel(8);
+    let (tx, rx) = tokio::sync::mpsc::channel(8);
+    let _source_notify = file::initial(&config, tx).await?;
 
 
 
-
+    Ok(())
 }
 
 fn log_init() -> anyhow::Result<()> {
@@ -45,7 +42,6 @@ fn log_init() -> anyhow::Result<()> {
         .duplicate_to_stderr(Duplicate::All)
         .format_for_stderr(colored_detailed_format)
         .format_for_stdout(colored_detailed_format)
-        //https://upload.wikimedia.org/wikipedia/commons/1/15/Xterm_256color_chart.svg
         .set_palette(String::from("b196;208;28;7;8"))
         .rotate(
             Criterion::Age(Age::Day),

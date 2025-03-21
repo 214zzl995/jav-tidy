@@ -1,9 +1,8 @@
+
 use std::{path::PathBuf, sync::OnceLock};
 
 use config::Config;
 use serde::Deserialize;
-
-static CONFIG: OnceLock<AppConfig> = OnceLock::new();
 
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct AppConfig {
@@ -16,7 +15,7 @@ pub(crate) struct AppConfig {
 }
 
 impl AppConfig {
-    pub(crate) fn initial(config_file: PathBuf) -> anyhow::Result<()> {
+    pub(crate) fn new(config_file: PathBuf) -> anyhow::Result<Self> {
         let settings = Config::builder()
             .add_source(config::File::from(config_file))
             .add_source(config::Environment::with_prefix("JAVTIDY"))
@@ -25,11 +24,7 @@ impl AppConfig {
 
         let config: AppConfig = settings.try_deserialize()?;
 
-        CONFIG
-            .set(config)
-            .map_err(|_| anyhow::anyhow!("Failed to set config"))?;
-
-        Ok(())
+        Ok(config)
     }
 
     pub fn get_migrate_files_ext(&self) -> &'static [&'static str] {
@@ -42,8 +37,4 @@ impl AppConfig {
 
         Box::leak(leaked_strs.into_boxed_slice())
     }
-}
-
-pub fn get_config() -> &'static AppConfig {
-    CONFIG.get().expect("Config not initialized")
 }
