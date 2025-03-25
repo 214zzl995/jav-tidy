@@ -1,10 +1,5 @@
 [workspace]
-members = [
-    ".",
-    "runner",
-    "crawler",
-    "crawler-derive",
-]
+members = [".", "runner", "crawler_template", "crawler_template_derive"]
 
 [workspace.package]
 authors = ["wei"]
@@ -26,8 +21,8 @@ parking_lot = "0.12"
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1.4", features = ["v4", "fast-rng", "macro-diagnostics"] }
 runner = { path = "runner" }
-crawler = { path = "crawler" }
-crawler-derive = { path = "crawler-derive" }
+crawler_template = { path = "crawler_template" }
+crawler_template_derive = { path = "crawler_template_derive" }
 log = "0.4"
 
 
@@ -59,3 +54,5 @@ file-id = "0.2.1"
 walkdir = "2"
 parking_lot = { workspace = true }
 fd-lock = "4.0.4"
+crawler_template_derive = { workspace = true }
+crawler_template = { workspace = true }

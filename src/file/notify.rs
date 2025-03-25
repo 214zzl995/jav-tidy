@@ -36,7 +36,7 @@ impl SourceNotify {
             sources: sources.to_owned(),
         })));
 
-        source_notify.listen(return_tx, rx, migrate_files_ext);
+        source_notify.listen(return_tx, rx, migrate_files_ext)?;
 
         Ok(source_notify)
     }
@@ -46,7 +46,7 @@ impl SourceNotify {
         return_tx: mpsc::Sender<PathBuf>,
         mut rx: mpsc::UnboundedReceiver<Result<Event, Error>>,
         migrate_files_ext: &'static [&'static str],
-    ) {
+    ) -> anyhow::Result<()> {
         tokio::spawn(async move {
             while let Some(Ok(event)) = rx.recv().await {
                 let return_tx = return_tx.clone();
@@ -76,18 +76,17 @@ impl SourceNotify {
             }
         });
 
-        {
-            let mut source_notify = self.0.lock();
+        let mut source_notify = self.0.lock();
 
-            let sources = source_notify.sources.clone();
+        let sources = source_notify.sources.clone();
 
-            for source in sources {
-                source_notify
-                    .watcher
-                    .watch(&source, ::notify::RecursiveMode::Recursive)
-                    .unwrap();
-            }
+        for source in sources {
+            source_notify
+                .watcher
+                .watch(&source, ::notify::RecursiveMode::Recursive)?;
         }
+
+        Ok(())
     }
 
     pub(super) fn _watch_source(&self, source: &Path) -> anyhow::Result<()> {

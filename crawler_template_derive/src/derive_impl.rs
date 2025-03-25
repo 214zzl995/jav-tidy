@@ -18,9 +18,9 @@ pub fn expand_derive(input: &DeriveInput) -> syn::Result<TokenStream2> {
     let matchs = build_try_set(named)?;
 
     let expanded = quote! {
-        use ::crawler::CrawlerErr;
+        use ::crawler_template::CrawlerErr;
 
-        impl ::crawler::CrawlerData for #ident {
+        impl ::crawler_template::CrawlerData for #ident {
             fn try_set(&mut self, field: &str, values: Vec<String>) -> Result<(), CrawlerErr> {
                 match field {
                     #(#matchs)*
@@ -74,7 +74,7 @@ fn build_try_set(named: &Punctuated<Field, Comma>) -> syn::Result<Vec<TokenStrea
                                 stringify!(#field_name) => {
                                     let vec: Vec<#inner_ty_tokens> = values
                                         .iter()
-                                        .map(|v| v.parse::<#inner_ty_tokens>().map_err(|_| CrawlerErr::ParseError(stringify!(#field_name).to_string())))
+                                        .map(|v| v.parse::<#inner_ty_tokens>().map_err(|_| ::crawler_template::CrawlerErr::ParseError(stringify!(#field_name).to_string())))
                                         .collect::<Result<Vec<_>, _>>()?;
                                     self.#field_name = vec;
                                     Ok(())
@@ -95,10 +95,10 @@ fn build_try_set(named: &Punctuated<Field, Comma>) -> syn::Result<Vec<TokenStrea
                             matchs.push(quote! {
                                 stringify!(#field_name) => {
                                     if values.len() > 1 {
-                                        return Err(CrawlerErr::InvalidValueCount(stringify!(#field_name).to_string(), values.len()));
+                                        return Err(::crawler_template::CrawlerErr::InvalidValueCount(stringify!(#field_name).to_string(), values.len()));
                                     }
                                     self.#field_name = if let Some(v) = values.first() {
-                                        Some(v.parse::<#inner_ty_tokens>().map_err(|_| CrawlerErr::ParseError(stringify!(#field_name).to_string()))?)
+                                        Some(v.parse::<#inner_ty_tokens>().map_err(|_| ::crawler_template::CrawlerErr::ParseError(stringify!(#field_name).to_string()))?)
                                     } else {
                                         None
                                     };
@@ -115,9 +115,9 @@ fn build_try_set(named: &Punctuated<Field, Comma>) -> syn::Result<Vec<TokenStrea
                 matchs.push(quote! {
                     stringify!(#field_name) => {
                         if values.len() != 1 {
-                            return Err(CrawlerErr::InvalidValueCount(stringify!(#field_name).to_string(), values.len()));
+                            return Err(::crawler_template::CrawlerErr::InvalidValueCount(stringify!(#field_name).to_string(), values.len()));
                         }
-                        let value = values[0].parse::<#ty_tokens>().map_err(|_| CrawlerErr::ParseError(stringify!(#field_name).to_string()))?;
+                        let value = values[0].parse::<#ty_tokens>().map_err(|_| ::crawler_template::CrawlerErr::ParseError(stringify!(#field_name).to_string()))?;
                         self.#field_name = value;
                         Ok(())
                     }

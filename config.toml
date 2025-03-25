@@ -29,4 +29,4 @@ ignored_id_pattern = [
 ]
 capital = true
 input_dir = "/path/to/input"
-output_dir1 = "/path/to/output"
+output_dir = "/path/to/output"

@@ -290,7 +290,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crawler"
+name = "crawler_template"
 version = "0.1.0"
 dependencies = [
  "pest",
@@ -306,10 +306,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "crawler-derive"
+name = "crawler_template_derive"
 version = "0.1.0"
 dependencies = [
- "crawler",
+ "crawler_template",
  "proc-macro2",
  "quote",
  "syn 2.0.90",
@@ -1045,6 +1045,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "config",
+ "crawler_template",
+ "crawler_template_derive",
  "fd-lock",
  "file-id",
  "flexi_logger",

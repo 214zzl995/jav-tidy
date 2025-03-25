@@ -1,5 +1,5 @@
 [package]
-name = "crawler"
+name = "crawler_template"
 version = "0.1.0"
 authors.workspace = true
 description.workspace = true

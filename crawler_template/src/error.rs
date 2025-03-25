@@ -41,4 +41,6 @@ pub enum CrawlerErr {
     InvalidValueCount(String, usize),
     #[error("The field {0} not found in the tempalte")]
     FieldNotFound(String),
+    #[error("The field {0} not found in the tempalte")]
+    ParseError(String),
 }

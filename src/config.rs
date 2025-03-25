@@ -1,5 +1,4 @@
-
-use std::{path::PathBuf, sync::OnceLock};
+use std::path::{Path, PathBuf};
 
 use config::Config;
 use serde::Deserialize;
@@ -15,7 +14,7 @@ pub(crate) struct AppConfig {
 }
 
 impl AppConfig {
-    pub(crate) fn new(config_file: PathBuf) -> anyhow::Result<Self> {
+    pub(crate) fn new(config_file: &Path) -> anyhow::Result<Self> {
         let settings = Config::builder()
             .add_source(config::File::from(config_file))
             .add_source(config::Environment::with_prefix("JAVTIDY"))
@@ -23,6 +22,8 @@ impl AppConfig {
             .unwrap();
 
         let config: AppConfig = settings.try_deserialize()?;
+
+        
 
         Ok(config)
     }

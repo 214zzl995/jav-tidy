@@ -1,6 +1,8 @@
 mod args;
 mod config;
+mod crawler;
 mod file;
+mod nfo;
 
 use std::path::Path;
 
@@ -13,27 +15,30 @@ use structopt::StructOpt;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    log_init().unwrap();
-    let start_param = args::StartParam::from_args_safe();
+    let arg = args::StartParam::from_args_safe().unwrap();
+    log_init(&arg.log_location).unwrap();
 
-    let config = config::AppConfig::new(start_param.unwrap().config_file)?;
+    let config = config::AppConfig::new(&arg.config_file)?;
 
-    let (tx, rx) = tokio::sync::mpsc::channel(8);
-    let _source_notify = file::initial(&config, tx).await?;
+    let (file_tx, file_rx) = tokio::sync::mpsc::channel(8);
+    let _source_notify = file::initial(&config, file_tx).await?;
 
-
+    crawler::initial(&config, file_rx)?;
 
     Ok(())
 }
 
-fn log_init() -> anyhow::Result<()> {
-    #[cfg(debug_assertions)]
-    let log_location = Path::new("./log");
-    #[cfg(not(debug_assertions))]
-    let log_location = Path::new("/log");
-    if !log_location.exists() {
-        std::fs::create_dir_all(&log_location)?;
+fn log_init(log_location: &Path) -> anyhow::Result<()> {
+    if log_location.is_file() {
+        return Err(anyhow::anyhow!("log file is a file, not a directory"));
+    } else if log_location.is_dir() {
+        if !log_location.exists() {
+            std::fs::create_dir_all(&log_location)?;
+        }
+    } else {
+        return Err(anyhow::anyhow!("log file is not a file or directory"));
     }
+
     let file_spec = FileSpec::default().directory(log_location);
 
     let _ = Logger::try_with_str("info,pago_mqtt=error,paho_mqtt_c=error")?
