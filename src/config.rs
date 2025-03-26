@@ -11,6 +11,7 @@ pub(crate) struct AppConfig {
     capital: bool,
     pub input_dir: PathBuf,
     output_dir: PathBuf,
+    pub thread_limit: usize,
 }
 
 impl AppConfig {

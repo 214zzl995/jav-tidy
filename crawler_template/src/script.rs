@@ -16,7 +16,7 @@ pub struct ScriptParser;
 
 #[derive(Debug, Clone)]
 pub struct CrawlerScript {
-    raw: String,
+    _raw: String,
     commands: Vec<Command>,
     pub(crate) rule: Rule,
 }
@@ -34,11 +34,13 @@ enum Command {
     Prepend(Param),
     Append(Param),
     Delete(Param),
-    Regex(&'static str, Regex),
+    RegexMatch(&'static str, Regex),
     Equals(Param),
     Html,
     Attr(Param),
     Val,
+    RegexExtract(&'static str, Regex),
+    RegexReplace(&'static str, &'static str, Regex),
 }
 
 #[derive(Debug, Clone)]
@@ -145,10 +147,23 @@ impl CrawlerScript {
                 Rule::delete => {
                     commands.push(Command::Delete(get_pair_param(&pair)));
                 }
-                Rule::regex => {
+                Rule::regex_extract => {
                     let param = get_pair_string(pair);
                     let regex = Regex::new(param)?;
-                    commands.push(Command::Regex(param, regex));
+                    commands.push(Command::RegexExtract(param, regex));
+                }
+                Rule::regex_replace => {
+                    let regex_str = get_pair_string_with_index(&pair, 0);
+                    let replace_str = get_pair_string_with_index(&pair, 1);
+
+                    let regex = Regex::new(regex_str)?;
+
+                    commands.push(Command::RegexReplace(regex_str, replace_str, regex));
+                }
+                Rule::regex_match => {
+                    let param = get_pair_string(pair);
+                    let regex = Regex::new(param)?;
+                    commands.push(Command::RegexMatch(param, regex));
                 }
                 Rule::equals => {
                     commands.push(Command::Equals(get_pair_param(&pair)));
@@ -167,7 +182,7 @@ impl CrawlerScript {
         }
 
         Ok(CrawlerScript {
-            raw: script.to_string(),
+            _raw: script.to_string(),
             commands,
             rule,
         })
@@ -312,12 +327,25 @@ impl CrawlerScript {
                         element_value.0 = element_value.0.replace(param, "");
                     });
                 }
-                Command::Regex(_, param) => {
+                Command::RegexExtract(_, regex) => {
+                    element_values.iter_mut().for_each(|element_value| {
+                        element_value.0 = regex
+                            .find_iter(&element_value.0)
+                            .map(|m| m.as_str())
+                            .collect();
+                    });
+                }
+                Command::RegexMatch(_, param) => {
                     element_values.retain(|value| param.is_match(&value.0));
 
                     if element_values.is_empty() {
                         return Ok(vec![]);
                     }
+                }
+                Command::RegexReplace(_, replace, regex) => {
+                    element_values.iter_mut().for_each(|element_value| {
+                        element_value.0 = regex.replace_all(&element_value.0, replace).to_string();
+                    });
                 }
                 Command::Equals(param) => {
                     let param = param.get_value(runtime_variable)?;
@@ -361,6 +389,19 @@ impl CrawlerScript {
 
 fn get_pair_string(pair: pest::iterators::Pair<Rule>) -> &'static str {
     let pair = match pair.into_inner().next() {
+        Some(pair) => pair.into_inner(),
+        None => return "",
+    };
+    Box::leak(
+        pair.into_iter()
+            .map(|p| p.as_str())
+            .collect::<String>()
+            .into_boxed_str(),
+    )
+}
+
+fn get_pair_string_with_index(pair: &pest::iterators::Pair<Rule>, index: usize) -> &'static str {
+    let pair = match pair.clone().into_inner().nth(index) {
         Some(pair) => pair.into_inner(),
         None => return "",
     };
@@ -449,14 +490,22 @@ impl Display for Command {
             Command::Parent(param) => write!(f, "parent({})", param),
             Command::Prev(param) => write!(f, "prev({})", param),
             Command::Nth(param) => write!(f, "nth({})", param),
-            Command::Replace(param1, param2) => write!(f, "replace({}, {})", param1, param2),
+            Command::Replace(param1, param2) => {
+                write!(f, "replace(from:{}, to:{})", param1, param2)
+            }
             Command::Uppercase => write!(f, "uppercase"),
             Command::Lowercase => write!(f, "lowercase"),
-            Command::Insert(param1, param2) => write!(f, "insert({}, {})", param1, param2),
+            Command::Insert(param1, param2) => {
+                write!(f, "insert(index:{}, value:{})", param1, param2)
+            }
             Command::Prepend(param) => write!(f, "prepend({})", param),
             Command::Append(param) => write!(f, "append({})", param),
             Command::Delete(param) => write!(f, "delete({})", param),
-            Command::Regex(param, _) => write!(f, "regex({})", param),
+            Command::RegexExtract(param, _) => write!(f, "regex_extract({})", param),
+            Command::RegexMatch(param, _) => write!(f, "regex_match({})", param),
+            Command::RegexReplace(param1, param2, _) => {
+                write!(f, "regex_replace(reg:{}, replace:{})", param1, param2)
+            }
             Command::Equals(param) => write!(f, "equal({})", param),
             Command::Html => write!(f, "html()"),
             Command::Attr(param) => write!(f, "attr({})", param),

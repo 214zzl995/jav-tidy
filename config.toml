@@ -30,3 +30,4 @@ ignored_id_pattern = [
 capital = true
 input_dir = "/path/to/input"
 output_dir = "/path/to/output"
+thread_limit = 3

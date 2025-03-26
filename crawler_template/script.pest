@@ -48,18 +48,23 @@ insert    = { ^"insert" ~ "(" ~ digit ~ "," ~ inner ~ ")" }
 prepend   = { ^"prepend" ~ "(" ~ inner ~ ")" }
 append    = { ^"append" ~ "(" ~ inner ~ ")" }
 delete    = { ^"delete" ~ "(" ~ inner ~ ")" }
+regex_extract = { ^"regex_extract" ~ "(" ~ inner_static_param ~ ")" }
+regex_replace = { ^"regex_replace" ~ "(" ~ inner_static_param ~ "," ~ inner_static_param ~ ")" }
 
-regex  = { ^"regex" ~ "(" ~ inner_static_param ~ ")" }
+regex_match  = { ^"regex_match" ~ "(" ~ inner_static_param ~ ")" }
 equals = { ^"equals" ~ "(" ~ inner ~ ")" }
 
 html = { ^"html()" }
 attr = { ^"attr" ~ "(" ~ inner ~ ")" }
 val  = { ^"val()" }
 
+text = { ^"text" ~ "(" ~ inner_static_param ~ ")" }
+
+
 // Define the Script Type
 selector_rule  = _{ selector | parent | prev | nth }
-transform_rule = _{ replace | uppercase | lowercase | insert | prepend | append | delete }
-condition_rule = _{ equals | regex }
+transform_rule = _{ replace | uppercase | lowercase | insert | prepend | append | delete | regex_extract }
+condition_rule = _{ equals | regex_match }
 accessor_rule  = _{ html | attr | val }
 
 element_access_selector_rig_chain = _{ "." ~ accessor_rule ~ ("." ~ transform_rule)* ~ "." ~ condition_rule }
@@ -75,4 +80,4 @@ value_access_chain = _{ (element_access_multi ~ ".")? ~ accessor_rule }
 
 element_access =  { SOI ~ element_access_multi ~ EOI }
 value_access   =  { SOI ~ value_access_chain ~ ("." ~ transform_rule)* ~ EOI }
-script         = _{ SOI ~ (element_access | value_access) ~ EOI }
+script         = _{ SOI ~ (element_access | value_access ) ~ EOI }

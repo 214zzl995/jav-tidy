@@ -56,3 +56,4 @@ parking_lot = { workspace = true }
 fd-lock = "4.0.4"
 crawler_template_derive = { workspace = true }
 crawler_template = { workspace = true }
+runner = { workspace = true }

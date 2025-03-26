@@ -12,11 +12,7 @@ pub enum CrawlerErr {
     #[error("模板未找到")]
     TempNotFound,
     #[error("Template internal information error, error cause: {0}")]
-    JsonTempFormatError(#[from] serde_json::Error),
-    #[error("Template internal information error, error cause: {0}")]
     YamlTempFormatError(#[from] serde_yaml::Error),
-    #[error("Template internal information error, error cause: {0}")]
-    TomlTempFormatError(#[from] toml_edit::de::Error),
     #[error("Selector parse failure , {0}")]
     SelectorError(String),
     #[error("{0}")]

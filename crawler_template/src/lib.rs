@@ -63,21 +63,15 @@ where
     pub fn from_yaml(yaml: &str) -> Result<Self, serde_yaml::Error> {
         serde_yaml::from_str(yaml)
     }
-    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(json)
-    }
-    pub fn from_toml(toml: &str) -> Result<Self, toml_edit::de::Error> {
-        toml_edit::de::from_str(toml)
-    }
     pub fn add_parameters(&mut self, key: &str, value: &str) {
         self.parameters
             .insert(key.to_string(), vec![value.to_string()]);
     }
 
-    pub(crate) fn get_all_fields(&self) -> Vec<String> {
+    pub(crate) fn _get_all_fields(&self) -> Vec<String> {
         let mut fields = Vec::new();
         self.nodes.iter().for_each(|(name, node)| {
-            fields.append(&mut node.get_all_fields(name.clone()));
+            fields.append(&mut node._get_all_fields(name.clone()));
         });
 
         fields
@@ -235,7 +229,7 @@ impl WorkflowNode {
 }
 
 impl CrawlerNode {
-    fn get_all_fields(&self, node_name: String) -> Vec<String> {
+    fn _get_all_fields(&self, node_name: String) -> Vec<String> {
         let mut fields = Vec::new();
         if Rule::value_access == self.script.rule {
             fields.push(node_name);
@@ -243,7 +237,7 @@ impl CrawlerNode {
 
         if let Some(children) = &self.children {
             children.iter().for_each(|(name, node)| {
-                fields.append(&mut node.get_all_fields(name.clone()));
+                fields.append(&mut node._get_all_fields(name.clone()));
             });
         }
 
@@ -251,7 +245,7 @@ impl CrawlerNode {
     }
 }
 
-fn default_false() -> bool {
+fn _default_false() -> bool {
     false
 }
 
