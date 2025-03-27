@@ -37,6 +37,16 @@ pub enum CrawlerErr {
     InvalidValueCount(String, usize),
     #[error("The field {0} not found in the tempalte")]
     FieldNotFound(String),
-    #[error("The field {0} not found in the tempalte")]
-    ParseError(String),
+    #[error("The field {0} parse error: {1}")]
+    ParseError(String, String),
+    #[error("InvalidTransformRule")]
+    InvalidTransformRule,
+    #[error("MissingIndex")]
+    MissingIndex,
+    #[error("UnsupportedTransformRule")]
+    UnsupportedTransformRule,
+    #[error("UnsupportedSelectorRule")]
+    UnsupportedSelectorRule,
+    #[error("The crawler script cannot use character processing functions alone")]
+    CharProcessAlone,
 }

@@ -74,7 +74,7 @@ fn build_try_set(named: &Punctuated<Field, Comma>) -> syn::Result<Vec<TokenStrea
                                 stringify!(#field_name) => {
                                     let vec: Vec<#inner_ty_tokens> = values
                                         .iter()
-                                        .map(|v| v.parse::<#inner_ty_tokens>().map_err(|_| ::crawler_template::CrawlerErr::ParseError(stringify!(#field_name).to_string())))
+                                        .map(|v| v.parse::<#inner_ty_tokens>().map_err(|err| ::crawler_template::CrawlerErr::ParseError(stringify!(#field_name).to_string(),err.to_string())))
                                         .collect::<Result<Vec<_>, _>>()?;
                                     self.#field_name = vec;
                                     Ok(())
@@ -98,7 +98,7 @@ fn build_try_set(named: &Punctuated<Field, Comma>) -> syn::Result<Vec<TokenStrea
                                         return Err(::crawler_template::CrawlerErr::InvalidValueCount(stringify!(#field_name).to_string(), values.len()));
                                     }
                                     self.#field_name = if let Some(v) = values.first() {
-                                        Some(v.parse::<#inner_ty_tokens>().map_err(|_| ::crawler_template::CrawlerErr::ParseError(stringify!(#field_name).to_string()))?)
+                                        Some(v.parse::<#inner_ty_tokens>().map_err(|err| ::crawler_template::CrawlerErr::ParseError(stringify!(#field_name).to_string(),err.to_string()))?)
                                     } else {
                                         None
                                     };
@@ -117,7 +117,7 @@ fn build_try_set(named: &Punctuated<Field, Comma>) -> syn::Result<Vec<TokenStrea
                         if values.len() != 1 {
                             return Err(::crawler_template::CrawlerErr::InvalidValueCount(stringify!(#field_name).to_string(), values.len()));
                         }
-                        let value = values[0].parse::<#ty_tokens>().map_err(|_| ::crawler_template::CrawlerErr::ParseError(stringify!(#field_name).to_string()))?;
+                        let value = values[0].parse::<#ty_tokens>().map_err(|err| ::crawler_template::CrawlerErr::ParseError(stringify!(#field_name).to_string(),err.to_string()))?;
                         self.#field_name = value;
                         Ok(())
                     }

@@ -58,14 +58,12 @@ html = { ^"html()" }
 attr = { ^"attr" ~ "(" ~ inner ~ ")" }
 val  = { ^"val()" }
 
-text = { ^"text" ~ "(" ~ inner_static_param ~ ")" }
-
 
 // Define the Script Type
-selector_rule  = _{ selector | parent | prev | nth }
-transform_rule = _{ replace | uppercase | lowercase | insert | prepend | append | delete | regex_extract }
-condition_rule = _{ equals | regex_match }
-accessor_rule  = _{ html | attr | val }
+selector_rule  = { selector | parent | prev | nth }
+transform_rule = { replace | uppercase | lowercase | insert | prepend | append | delete | regex_extract | regex_replace }
+condition_rule = { equals | regex_match }
+accessor_rule  = { html | attr | val }
 
 element_access_selector_rig_chain = _{ "." ~ accessor_rule ~ ("." ~ transform_rule)* ~ "." ~ condition_rule }
 element_access_selector_chain     = _{ selector_rule ~ element_access_selector_rig_chain? }
@@ -80,4 +78,6 @@ value_access_chain = _{ (element_access_multi ~ ".")? ~ accessor_rule }
 
 element_access =  { SOI ~ element_access_multi ~ EOI }
 value_access   =  { SOI ~ value_access_chain ~ ("." ~ transform_rule)* ~ EOI }
-script         = _{ SOI ~ (element_access | value_access ) ~ EOI }
+text_access    =  { SOI ~ transform_rule ~ ("." ~ transform_rule)* ~ EOI }
+script         = _{ SOI ~ (element_access | value_access | text_access) ~ EOI }
+

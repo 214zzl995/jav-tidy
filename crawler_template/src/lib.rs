@@ -91,9 +91,8 @@ where
         let mut runtime_variable = self.get_start_parameters();
 
         for (index, root) in self.workflow.iter().enumerate() {
-            
             let url = if index == 0 {
-                url.to_string()     
+                url.to_string()
             } else {
                 runtime_variable
                     .get(&root.url_key)
@@ -311,7 +310,7 @@ impl<'de> Deserialize<'de> for CrawlerNode {
 
         let data = CrawlerNodeData::deserialize(deserializer)?;
 
-        let script = match CrawlerScript::new(&data.script) {
+        let script = match CrawlerScript::new(&data.script, false) {
             Ok(script) => script,
             Err(e) => return Err(serde::de::Error::custom(e.to_string())),
         };

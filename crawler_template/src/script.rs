@@ -80,7 +80,42 @@ impl Param {
 }
 
 impl CrawlerScript {
-    pub fn new(script: &str) -> Result<CrawlerScript, CrawlerErr> {
+    pub fn new(script: &str, is_text_script: bool) -> Result<CrawlerScript, CrawlerErr> {
+        let mut commands = Vec::new();
+        let mut pairs = ScriptParser::parse(Rule::script, script)?;
+
+        let script_pair = pairs.next().unwrap();
+        let rule = script_pair.as_rule();
+
+        match rule {
+            Rule::text_access => {
+                if !is_text_script {
+                    return Err(CrawlerErr::CharProcessAlone);
+                }
+            }
+            Rule::value_access => {}
+            Rule::element_access => {}
+            _ => {}
+        }
+
+        for pair in script_pair.into_inner() {
+            match pair.as_rule() {
+                Rule::selector_rule => commands.push(parse_selector_rule(pair)?),
+                Rule::transform_rule => commands.push(parse_transform_rule(pair)?),
+                Rule::condition_rule => commands.push(parse_condition_rule(pair)?),
+                Rule::accessor_rule => commands.push(parse_accessor_rule(pair)?),
+                _ => {}
+            }
+        }
+
+        Ok(CrawlerScript {
+            _raw: script.to_string(),
+            commands,
+            rule,
+        })
+    }
+
+    pub fn _new(script: &str) -> Result<CrawlerScript, CrawlerErr> {
         let mut commands = Vec::new();
         let mut pairs = ScriptParser::parse(Rule::script, script)?;
 
@@ -387,6 +422,97 @@ impl CrawlerScript {
     }
 }
 
+fn parse_transform_rule(pair: pest::iterators::Pair<Rule>) -> Result<Command, CrawlerErr> {
+    // let inner_rule = pair
+    //     .into_inner()
+    //     .next()
+    //     .ok_or(CrawlerErr::InvalidTransformRule)?;
+
+    match pair.as_rule() {
+        Rule::replace => {
+            let from = get_pair_param_with_index(&pair, 0);
+            let to = get_pair_param_with_index(&pair, 1);
+            Ok(Command::Replace(from, to))
+        }
+        Rule::uppercase => Ok(Command::Uppercase),
+        Rule::lowercase => Ok(Command::Lowercase),
+        Rule::insert => {
+            let index = get_pair_string_with_index(&pair, 0)
+                .trim()
+                .parse()
+                .unwrap_or(0);
+            let param = get_pair_param_with_index(&pair, 1);
+            Ok(Command::Insert(index, param))
+        }
+        Rule::prepend => Ok(Command::Prepend(get_pair_param(&pair))),
+        Rule::append => Ok(Command::Append(get_pair_param(&pair))),
+        Rule::delete => Ok(Command::Delete(get_pair_param(&pair))),
+        Rule::regex_extract => {
+            let pattern = get_pair_string(pair);
+            let regex = Regex::new(pattern).map_err(CrawlerErr::from)?;
+            Ok(Command::RegexExtract(pattern, regex))
+        }
+        Rule::regex_replace => {
+            let regex_str = get_pair_string_with_index(&pair, 0);
+            let replace_str = get_pair_string_with_index(&pair, 1);
+            let regex = Regex::new(regex_str).map_err(CrawlerErr::from)?;
+            Ok(Command::RegexReplace(regex_str, replace_str, regex))
+        }
+        _ => Err(CrawlerErr::UnsupportedTransformRule),
+    }
+}
+
+fn parse_selector_rule(pair: pest::iterators::Pair<Rule>) -> Result<Command, CrawlerErr> {
+    match pair.as_rule() {
+        Rule::selector => {
+            let param = get_pair_string(pair);
+
+            let selector = match param {
+                "" => None,
+                _ => Some(
+                    Selector::parse(param)
+                        .map_err(|err| CrawlerErr::SelectorError(err.to_string()))?,
+                ),
+            };
+            Ok(Command::Selector(param, selector))
+        }
+        Rule::parent => {
+            let index = pair.into_inner().as_str().parse().unwrap_or(1);
+            Ok(Command::Parent(index))
+        }
+        Rule::prev => {
+            let index = pair.into_inner().as_str().parse().unwrap_or(1);
+            Ok(Command::Prev(index))
+        }
+        Rule::nth => {
+            let index = pair.into_inner().as_str().parse().unwrap_or(1);
+            Ok(Command::Nth(index))
+        }
+        _ => Err(CrawlerErr::UnsupportedSelectorRule),
+    }
+}
+
+fn parse_condition_rule(pair: pest::iterators::Pair<Rule>) -> Result<Command, CrawlerErr> {
+    match pair.as_rule() {
+        Rule::equals => Ok(Command::Equals(get_pair_param(&pair))),
+        Rule::regex_match => {
+            let pattern = get_pair_string(pair);
+            let regex = Regex::new(pattern).map_err(CrawlerErr::from)?;
+            Ok(Command::RegexMatch(pattern, regex))
+        }
+        _ => Err(CrawlerErr::UnsupportedSelectorRule),
+    }
+}
+
+fn parse_accessor_rule(pair: pest::iterators::Pair<Rule>) -> Result<Command, CrawlerErr> {
+    match pair.as_rule() {
+        Rule::html => Ok(Command::Html),
+        Rule::attr => Ok(Command::Attr(get_pair_param(&pair))),
+        Rule::val => Ok(Command::Val),
+        _ => Err(CrawlerErr::UnsupportedSelectorRule),
+    }
+}
+
 fn get_pair_string(pair: pest::iterators::Pair<Rule>) -> &'static str {
     let pair = match pair.into_inner().next() {
         Some(pair) => pair.into_inner(),
@@ -522,3 +648,7 @@ impl Display for Param {
         }
     }
 }
+
+
+
+
