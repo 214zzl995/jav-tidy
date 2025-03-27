@@ -99,11 +99,30 @@ impl CrawlerScript {
         }
 
         for pair in script_pair.into_inner() {
+
+            fn get_commands(
+                handle: fn(pest::iterators::Pair<Rule>) -> Result<Command, CrawlerErr>,
+                pairs: pest::iterators::Pair<Rule>,
+            ) -> Result<Vec<Command>, CrawlerErr> {
+                let mut commands = Vec::new();
+                for pair in pairs.into_inner() {
+                    commands.push(handle(pair)?);
+                }
+                Ok(commands)
+            }
             match pair.as_rule() {
-                Rule::selector_rule => commands.push(parse_selector_rule(pair)?),
-                Rule::transform_rule => commands.push(parse_transform_rule(pair)?),
-                Rule::condition_rule => commands.push(parse_condition_rule(pair)?),
-                Rule::accessor_rule => commands.push(parse_accessor_rule(pair)?),
+                Rule::selector_rule => {
+                    commands.append(&mut get_commands(parse_selector_rule, pair)?)
+                }
+                Rule::transform_rule => {
+                    commands.append(&mut get_commands(parse_transform_rule, pair)?)
+                }
+                Rule::condition_rule => {
+                    commands.append(&mut get_commands(parse_condition_rule, pair)?)
+                }
+                Rule::accessor_rule => {
+                    commands.append(&mut get_commands(parse_accessor_rule, pair)?)
+                }
                 _ => {}
             }
         }
@@ -126,6 +145,7 @@ impl CrawlerScript {
             match pair.as_rule() {
                 Rule::selector => {
                     let param = get_pair_string(pair);
+
 
                     let selector = match param {
                         "" => None,
@@ -423,11 +443,6 @@ impl CrawlerScript {
 }
 
 fn parse_transform_rule(pair: pest::iterators::Pair<Rule>) -> Result<Command, CrawlerErr> {
-    // let inner_rule = pair
-    //     .into_inner()
-    //     .next()
-    //     .ok_or(CrawlerErr::InvalidTransformRule)?;
-
     match pair.as_rule() {
         Rule::replace => {
             let from = get_pair_param_with_index(&pair, 0);
@@ -649,6 +664,147 @@ impl Display for Param {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::CrawlerErr;
 
+    #[test]
+    fn test_new_element_access_selector() {
+        let script = r#"selector("div.content")"#;
+        let crawler_script = CrawlerScript::new(script, false).unwrap();
 
+        assert_eq!(crawler_script.rule, Rule::element_access);
+        assert_eq!(crawler_script.commands.len(), 1);
 
+        match &crawler_script.commands[0] {
+            Command::Selector(selector_str, Some(_)) => {
+                assert_eq!(*selector_str, "div.content");
+            }
+            _ => panic!("Unexpected command type"),
+        }
+    }
+
+    #[test]
+    fn test_new_element_access_with_multiple_commands() {
+        let script = r#"selector("div.content").parent(1).attr("href")"#;
+        let crawler_script = CrawlerScript::new(script, false).unwrap();
+
+        assert_eq!(crawler_script.rule, Rule::value_access);
+        assert_eq!(crawler_script.commands.len(), 3);
+
+        match &crawler_script.commands[0] {
+            Command::Selector(selector_str, Some(_)) => {
+                assert_eq!(*selector_str, "div.content");
+            }
+            _ => panic!("Unexpected first command type"),
+        }
+
+        match &crawler_script.commands[1] {
+            Command::Parent(index) => {
+                assert_eq!(*index, 1);
+            }
+            _ => panic!("Unexpected second command type"),
+        }
+
+        match &crawler_script.commands[2] {
+            Command::Attr(param) => {
+                assert_eq!(param.to_string(), "href");
+            }
+            _ => panic!("Unexpected third command type"),
+        }
+    }
+
+    #[test]
+    fn test_new_value_access() {
+        let script = r#"selector("div.content").val().uppercase()"#;
+        let crawler_script = CrawlerScript::new(script, false).unwrap();
+
+        assert_eq!(crawler_script.rule, Rule::value_access);
+        assert_eq!(crawler_script.commands.len(), 3);
+
+        match &crawler_script.commands[0] {
+            Command::Selector(selector_str, Some(_)) => {
+                assert_eq!(*selector_str, "div.content");
+            }
+            _ => panic!("Unexpected first command type"),
+        }
+
+        match &crawler_script.commands[1] {
+            Command::Val => {}
+            _ => panic!("Unexpected second command type"),
+        }
+
+        match &crawler_script.commands[2] {
+            Command::Uppercase => {}
+            _ => panic!("Unexpected third command type"),
+        }
+    }
+
+    #[test]
+    fn test_new_text_access() {
+        let script = r#"replace("old", "new").uppercase()"#;
+        let crawler_script = CrawlerScript::new(script, true).unwrap();
+
+        assert_eq!(crawler_script.rule, Rule::text_access);
+        assert_eq!(crawler_script.commands.len(), 2);
+
+        match &crawler_script.commands[0] {
+            Command::Replace(from, to) => {
+                assert_eq!(from.to_string(), "old");
+                assert_eq!(to.to_string(), "new");
+            }
+            _ => panic!("Unexpected first command type"),
+        }
+
+        match &crawler_script.commands[1] {
+            Command::Uppercase => {}
+            _ => panic!("Unexpected second command type"),
+        }
+    }
+
+    #[test]
+    fn test_new_invalid_text_script_for_element_access() {
+        let script = r#"replace("old", "new")"#;
+        let result = CrawlerScript::new(script, false);
+
+        assert!(matches!(result, Err(CrawlerErr::CharProcessAlone)));
+    }
+
+    #[test]
+    fn test_new_complex_access_with_conditions() {
+        let script =
+            r#"selector("div.content").html().replace("old", "new").equals("result")"#;
+        let crawler_script = CrawlerScript::new(script, false).unwrap();
+
+        assert_eq!(crawler_script.rule, Rule::element_access);
+        assert_eq!(crawler_script.commands.len(), 4);
+
+        match &crawler_script.commands[0] {
+            Command::Selector(selector_str, Some(_)) => {
+                assert_eq!(*selector_str, "div.content");
+            }
+            _ => panic!("Unexpected first command type"),
+        }
+
+        match &crawler_script.commands[1] {
+            Command::Html => {}
+            _ => panic!("Unexpected second command type"),
+        }
+
+        match &crawler_script.commands[2] {
+            Command::Replace(from, to) => {
+                assert_eq!(from.to_string(), "old");
+                assert_eq!(to.to_string(), "new");
+            }
+            _ => panic!("Unexpected third command type"),
+        }
+
+        match &crawler_script.commands[3] {
+            Command::Equals(param) => {
+                assert_eq!(param.to_string(), "result");
+            }
+            _ => panic!("Unexpected fourth command type"),
+        }
+    }
+}
