@@ -99,7 +99,6 @@ impl CrawlerScript {
         }
 
         for pair in script_pair.into_inner() {
-
             fn get_commands(
                 handle: fn(pest::iterators::Pair<Rule>) -> Result<Command, CrawlerErr>,
                 pairs: pest::iterators::Pair<Rule>,
@@ -122,115 +121,6 @@ impl CrawlerScript {
                 }
                 Rule::accessor_rule => {
                     commands.append(&mut get_commands(parse_accessor_rule, pair)?)
-                }
-                _ => {}
-            }
-        }
-
-        Ok(CrawlerScript {
-            _raw: script.to_string(),
-            commands,
-            rule,
-        })
-    }
-
-    pub fn _new(script: &str) -> Result<CrawlerScript, CrawlerErr> {
-        let mut commands = Vec::new();
-        let mut pairs = ScriptParser::parse(Rule::script, script)?;
-
-        let script_pair = pairs.next().unwrap();
-        let rule = script_pair.as_rule();
-
-        for pair in script_pair.into_inner() {
-            match pair.as_rule() {
-                Rule::selector => {
-                    let param = get_pair_string(pair);
-
-
-                    let selector = match param {
-                        "" => None,
-                        _ => Some(
-                            Selector::parse(param)
-                                .map_err(|err| CrawlerErr::SelectorError(err.to_string()))?,
-                        ),
-                    };
-                    commands.push(Command::Selector(param, selector));
-                }
-                Rule::parent => {
-                    let index = pair.into_inner().as_str().parse::<usize>().unwrap_or(1);
-                    commands.push(Command::Parent(index));
-                }
-                Rule::prev => {
-                    let index = pair.into_inner().as_str().parse::<usize>().unwrap_or(1);
-                    commands.push(Command::Prev(index));
-                }
-                Rule::nth => {
-                    let index = pair.into_inner().as_str().parse::<usize>().unwrap_or(1);
-                    commands.push(Command::Nth(index));
-                }
-                Rule::replace => {
-                    let from = get_pair_param_with_index(&pair, 0);
-
-                    let to = get_pair_param_with_index(&pair, 1);
-
-                    commands.push(Command::Replace(from, to));
-                }
-                Rule::uppercase => {
-                    commands.push(Command::Uppercase);
-                }
-                Rule::lowercase => {
-                    commands.push(Command::Lowercase);
-                }
-                Rule::insert => {
-                    let param = get_pair_param_with_index(&pair, 1);
-
-                    let index = pair
-                        .into_inner()
-                        .next()
-                        .unwrap()
-                        .as_str()
-                        .parse::<usize>()
-                        .unwrap();
-                    commands.push(Command::Insert(index, param));
-                }
-                Rule::prepend => {
-                    commands.push(Command::Prepend(get_pair_param(&pair)));
-                }
-                Rule::append => {
-                    commands.push(Command::Append(get_pair_param(&pair)));
-                }
-                Rule::delete => {
-                    commands.push(Command::Delete(get_pair_param(&pair)));
-                }
-                Rule::regex_extract => {
-                    let param = get_pair_string(pair);
-                    let regex = Regex::new(param)?;
-                    commands.push(Command::RegexExtract(param, regex));
-                }
-                Rule::regex_replace => {
-                    let regex_str = get_pair_string_with_index(&pair, 0);
-                    let replace_str = get_pair_string_with_index(&pair, 1);
-
-                    let regex = Regex::new(regex_str)?;
-
-                    commands.push(Command::RegexReplace(regex_str, replace_str, regex));
-                }
-                Rule::regex_match => {
-                    let param = get_pair_string(pair);
-                    let regex = Regex::new(param)?;
-                    commands.push(Command::RegexMatch(param, regex));
-                }
-                Rule::equals => {
-                    commands.push(Command::Equals(get_pair_param(&pair)));
-                }
-                Rule::html => {
-                    commands.push(Command::Html);
-                }
-                Rule::attr => {
-                    commands.push(Command::Attr(get_pair_param(&pair)));
-                }
-                Rule::val => {
-                    commands.push(Command::Val);
                 }
                 _ => {}
             }
@@ -439,6 +329,49 @@ impl CrawlerScript {
             .into_iter()
             .map(|(_, element)| element)
             .collect())
+    }
+
+    pub(crate) fn get_text_value(&self, text_value: &str) -> Result<String, CrawlerErr> {
+        let mut text_value = text_value.to_string();
+        for command in self.commands.clone() {
+            match command {
+                Command::Replace(from, to) => {
+                    let from = from.get_value(&mut HashMap::new())?;
+                    let to = to.get_value(&mut HashMap::new())?;
+                    text_value = text_value.replace(from, to);
+                }
+                Command::Uppercase => {
+                    text_value = text_value.to_uppercase();
+                }
+                Command::Lowercase => {
+                    text_value = text_value.to_lowercase();
+                }
+                Command::Append(param) => {
+                    let param = param.get_value(&mut HashMap::new())?;
+                    text_value.push_str(param);
+                }
+                Command::Prepend(param) => {
+                    let param = param.get_value(&mut HashMap::new())?;
+                    text_value.insert_str(0, param);
+                }
+                Command::Insert(index, param) => {
+                    let param = param.get_value(&mut HashMap::new())?;
+                    text_value.insert_str(index, param);
+                }
+                Command::Delete(param) => {
+                    let param = param.get_value(&mut HashMap::new())?;
+                    text_value = text_value.replace(param, "");
+                }
+                Command::RegexExtract(_, regex) => {
+                    text_value = regex.find_iter(&text_value).map(|m| m.as_str()).collect();
+                }
+                Command::RegexReplace(_, replace, regex) => {
+                    text_value = regex.replace_all(&text_value, replace).to_string();
+                }
+                _ => {}
+            }
+        }
+        Ok(text_value)
     }
 }
 
@@ -773,8 +706,7 @@ mod tests {
 
     #[test]
     fn test_new_complex_access_with_conditions() {
-        let script =
-            r#"selector("div.content").html().replace("old", "new").equals("result")"#;
+        let script = r#"selector("div.content").html().replace("old", "new").equals("result")"#;
         let crawler_script = CrawlerScript::new(script, false).unwrap();
 
         assert_eq!(crawler_script.rule, Rule::element_access);
