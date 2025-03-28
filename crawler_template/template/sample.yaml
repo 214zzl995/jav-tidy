@@ -1,3 +1,6 @@
+entrypoint: "${base_url}/search?q=${crawl_name}&f=all"
+env:
+  page: ["1"]
 nodes:
   main:
     script: selector(".movie-list")
@@ -18,11 +21,11 @@ nodes:
               detail:
                 script: selector(".panel-block>strong")
                 children:
-                  tags: val().delete(" ").equals("類別:").next().selector("a").val()
-                  actors: val().delete(" ").equals("演員:").next().selector(".female").prev().val()
-                  release_time: val().delete(" ").equals("日期:").next().val()
-                  duration: val().delete(" ").equals("時長:").next().val().delete(" 分鍾")
-                  director: val().delete(" ").equals("導演:").next().val()
-                  series: val().delete(" ").equals("系列:").next().val()
-                  publisher: val().delete(" ").equals("發行:").next().val()
-                  makers: val().delete(" ").equals("片商:").next().val()
+                  tags: val().delete(" ").equals("類別:").nth().selector("a").val()
+                  actors: val().delete(" ").equals("演員:").nth().selector(".female").prev().val()
+                  release_time: val().delete(" ").equals("日期:").nth().val()
+                  duration: val().delete(" ").equals("時長:").nth().val().delete(" 分鍾")
+                  director: val().delete(" ").equals("導演:").nth().val()
+                  series: val().delete(" ").equals("系列:").nth().val()
+                  publisher: val().delete(" ").equals("發行:").nth().val()
+                  makers: val().delete(" ").equals("片商:").nth().val()

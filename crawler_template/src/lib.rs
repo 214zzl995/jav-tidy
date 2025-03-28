@@ -3,7 +3,7 @@ use std::{collections::HashMap, marker::PhantomData};
 use crate::script::Rule;
 use scraper::ElementRef;
 use script::CrawlerScript;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer};
 
 pub use error::CrawlerErr;
 
@@ -15,21 +15,16 @@ pub struct Template<T>
 where
     T: CrawlerData + Default + Send,
 {
-    entrypoint: String,
     resource_type: PhantomData<T>,
     parameters: HashMap<String, Vec<String>>,
-    workflow: Vec<WorkflowRoot>,
+    workflows: Vec<WorkflowRoot>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 struct CrawlerNode {
-    #[serde(rename = "script")]
-    script_raw: String,
-    #[serde(default = "crate::_default_false", skip_serializing_if = "is_false")]
+    _script_raw: String,
     request: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     children: Option<HashMap<String, CrawlerNode>>,
-    #[serde(skip)]
     script: CrawlerScript,
 }
 
@@ -76,21 +71,16 @@ where
         let mut value = T::default();
         let mut runtime_variable = self.get_start_parameters();
 
-        let url = self.build_entrypoint();
+        for workflow in self.workflows.iter() {
+            let url = runtime_variable
+                .get(&workflow.url_key)
+                .unwrap()
+                .first()
+                .unwrap()
+                .clone();
 
-        for (index, root) in self.workflow.iter().enumerate() {
-            let url = if index == 0 {
-                url.to_string()
-            } else {
-                runtime_variable
-                    .get(&root.url_key)
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .clone()
-            };
-
-            root.crawler(&url, &mut value, &mut runtime_variable)
+            workflow
+                .crawler(&url, &mut value, &mut runtime_variable)
                 .await?;
         }
 
@@ -101,33 +91,20 @@ where
         let mut value = T::default();
         let mut runtime_variable = self.get_start_parameters();
 
-        let url = self.build_entrypoint();
+        for workflow in self.workflows.iter() {
+            let url = runtime_variable
+                .get(&workflow.url_key)
+                .unwrap()
+                .first()
+                .unwrap()
+                .clone();
 
-        for (index, root) in self.workflow.iter().enumerate() {
-            let url = if index == 0 {
-                url.to_string()
-            } else {
-                runtime_variable
-                    .get(&root.url_key)
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .clone()
-            };
-
-            root.crawler_blocking(&url, &mut value, &mut runtime_variable)
+            workflow
+                .crawler_blocking(&url, &mut value, &mut runtime_variable)
                 .unwrap();
         }
 
         Ok(value)
-    }
-
-    fn build_entrypoint(&self) -> String {
-        self.parameters
-            .iter()
-            .fold(self.entrypoint.clone(), |acc, (k, v)| {
-                acc.replace(&format!("${{{}}}", k), &v[0])
-            })
     }
 }
 
@@ -207,6 +184,7 @@ impl WorkflowNode {
                 let elements = self
                     .script
                     .get_elements(root_element_refs, runtime_variable)?;
+
                 for node in &self.children {
                     node.process(elements.clone(), value, runtime_variable)?;
                 }
@@ -215,6 +193,7 @@ impl WorkflowNode {
                 let values = self
                     .script
                     .get_values(root_element_refs, runtime_variable)?;
+
                 value.try_set(&self.name, values.clone())?;
                 runtime_variable.insert(self.name.clone(), values);
             }
@@ -242,12 +221,8 @@ impl CrawlerNode {
     }
 }
 
-fn _default_false() -> bool {
+fn default_false() -> bool {
     false
-}
-
-fn is_false(value: &bool) -> bool {
-    !value
 }
 
 impl<'de, T> Deserialize<'de> for Template<T>
@@ -258,14 +233,14 @@ where
     where
         D: Deserializer<'de>,
     {
-        #[derive(Deserialize)]
+        #[derive(Deserialize, Clone)]
         #[serde(untagged)]
         enum TemplateEntrypointRaw {
             Simple(String),
             Complex { url: String, script: String },
         }
 
-        #[derive(Deserialize)]
+        #[derive(Deserialize, Clone)]
         struct TemplateData {
             entrypoint: TemplateEntrypointRaw,
             nodes: HashMap<String, CrawlerNode>,
@@ -293,6 +268,8 @@ where
 
         collect_requested_nodes(&data.nodes, &mut workflow);
 
+        let envs = data.env.unwrap_or_default();
+
         let entrypoint = match data.entrypoint {
             TemplateEntrypointRaw::Simple(url) => url,
             TemplateEntrypointRaw::Complex { url, script } => {
@@ -300,15 +277,16 @@ where
                     .map_err(|e| serde::de::Error::custom(format!("Script parse error: {}", e)))?;
 
                 script
-                    .get_text_value(&url)
+                    .get_text_value(&url, &envs)
                     .map_err(|e| serde::de::Error::custom(format!("Script parse error: {}", e)))?
             }
         };
 
+        workflow[0].url_key = entrypoint;
+
         Ok(Template {
-            entrypoint,
-            parameters: data.env.unwrap_or_default(),
-            workflow,
+            parameters: envs,
+            workflows: workflow,
             resource_type: PhantomData,
         })
     }
@@ -324,7 +302,9 @@ impl<'de> Deserialize<'de> for CrawlerNode {
         enum CrawlerNodeData {
             Complex {
                 script: String,
-                request: Option<bool>,
+                #[serde(default = "crate::default_false")]
+                request: bool,
+                #[serde(default)]
                 children: Option<HashMap<String, CrawlerNode>>,
             },
             Simple(String),
@@ -338,7 +318,7 @@ impl<'de> Deserialize<'de> for CrawlerNode {
                 request,
                 children,
             } => (script, request, children),
-            CrawlerNodeData::Simple(script) => (script, None, None),
+            CrawlerNodeData::Simple(script) => (script, false, None),
         };
 
         let script = match CrawlerScript::new(&script_raw, false) {
@@ -348,7 +328,7 @@ impl<'de> Deserialize<'de> for CrawlerNode {
 
         if script.rule == Rule::value_access
             && matches!(children.as_ref(), Some(c) if !c.is_empty())
-            && !request.unwrap_or(true)
+            && !request
         {
             return Err(serde::de::Error::custom(
                 "Element access is not allowed in the root node",
@@ -356,8 +336,8 @@ impl<'de> Deserialize<'de> for CrawlerNode {
         }
 
         Ok(CrawlerNode {
-            script_raw,
-            request: request.unwrap_or(false),
+            _script_raw: script_raw,
+            request,
             children,
             script,
         })
@@ -394,5 +374,105 @@ impl From<WorkflowNodeWithName> for WorkflowNode {
                 }
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Default, Debug)]
+    struct Movie {
+        title: String,
+        thumbnail: String,
+        detail_url: String,
+        tags: Vec<String>,
+    }
+
+    impl CrawlerData for Movie {
+        fn try_set(&mut self, field: &str, values: Vec<String>) -> Result<(), CrawlerErr> {
+            match field {
+                "title" => self.title = values.first().cloned().unwrap_or_default(),
+                "thumbnail" => self.thumbnail = values.first().cloned().unwrap_or_default(),
+                "detail_url" => self.detail_url = values.first().cloned().unwrap_or_default(),
+                "tags" => {
+                    self.tags = values
+                        .into_iter()
+                        .filter(|v| !v.is_empty())
+                        .collect::<Vec<String>>();
+                }
+                _ => return Ok(()),
+            }
+            Ok(())
+        }
+    }
+
+    const SAMPLE_YAML: &str = include_str!("../template/sample.yaml");
+
+    #[test]
+    fn test_workflow_format() {
+        let mut template = Template::<Movie>::from_yaml(SAMPLE_YAML).unwrap();
+        template.add_parameters("crawl_name", "TEST-001");
+        template.add_parameters("base_url", "https://example.com");
+
+        assert_eq!(
+            template.workflows[0].url_key,
+            "https://example.com/search?q=TEST-001&f=all"
+        );
+        assert_eq!(template.workflows.len(), 2);
+    }
+
+    #[test]
+    fn test_workflow_execution() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async move {
+            let mut server = mockito::Server::new_async().await;
+
+            let host = server.host_with_port();
+
+            let _m = server
+                .mock("GET", "/movies?page=1")
+                .with_status(200)
+                .with_body(
+                    r#"
+                    <div class="movie-list">
+                        <div class="video-title"><strong>TEST-MOVIE</strong></div>
+                        <img src="thumbnail.jpg">
+                        <a href="detail/123"></a>
+                    </div>
+                    "#,
+                )
+                .create();
+
+            let _m2 = server
+                .mock("GET", "/detail/123")
+                .with_status(200)
+                .with_body("<div class='detail'>...</div>")
+                .create();
+
+            let mut template = Template::<Movie>::from_yaml(SAMPLE_YAML).unwrap();
+            template.add_parameters("base_url", &host);
+            template.add_parameters("crawl_name", "TEST-MOVIE");
+
+            let result = template.crawler().await.unwrap();
+
+            assert_eq!(result.title, "TEST-MOVIE");
+            assert_eq!(result.thumbnail, "thumbnail.jpg");
+            assert_eq!(result.detail_url, "https://cdn.example.comdetail/123");
+        });
+    }
+
+    #[test]
+    fn test_invalid_script() {
+        let yaml = r#"
+            entrypoint: "invalid"
+            nodes:
+              main:
+                script: "invalid[selector"
+        "#;
+
+        let result = Template::<Movie>::from_yaml(yaml);
+        assert!(matches!(result, Err(serde_yaml::Error { .. })));
     }
 }

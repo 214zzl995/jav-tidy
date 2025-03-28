@@ -12,13 +12,14 @@ repository.workspace = true
 
 [dependencies]
 scraper = "0.19.0"
-serde = {workspace = true, features = ["derive"]}
+serde = { workspace = true, features = ["derive"] }
 pest = "2.5.6"
-pest_derive = "2.5.6" 
-regex = {workspace = true}
-thiserror = {workspace = true}
+pest_derive = "2.5.6"
+regex = { workspace = true }
+thiserror = { workspace = true }
 serde_yaml = "0.9.34"
 reqwest = { version = "0.11.9", features = ["json", "blocking"] }
 
 [dev-dependencies]
-
+mockito = "*"
+tokio = { workspace = true }
