@@ -1,14 +1,11 @@
-use std::{
-    collections::HashMap,
-    fmt::{Debug, Display},
-};
+use std::fmt::{Debug, Display};
 
 use pest::Parser;
 use pest_derive::Parser;
 use regex::Regex;
 use scraper::{ElementRef, Selector};
 
-use crate::error::CrawlerErr;
+use crate::{error::CrawlerErr, RuntimeVariable};
 
 #[derive(Parser)]
 #[grammar = "../script.pest"]
@@ -52,7 +49,7 @@ enum Param {
 impl Param {
     pub(crate) fn get_value(
         &self,
-        runtime_variable: &HashMap<String, Vec<String>>,
+        runtime_variable: &RuntimeVariable,
     ) -> Result<String, CrawlerErr> {
         match self {
             Param::StaticStr(param) => Ok(param.to_string()),
@@ -83,23 +80,12 @@ impl Param {
 }
 
 impl CrawlerScript {
-    pub fn new(script: &str, is_text_script: bool) -> Result<CrawlerScript, CrawlerErr> {
+    pub fn new(script: &str) -> Result<CrawlerScript, CrawlerErr> {
         let mut commands = Vec::new();
         let mut pairs = ScriptParser::parse(Rule::script, script)?;
 
         let script_pair = pairs.next().unwrap();
         let rule = script_pair.as_rule();
-
-        match rule {
-            Rule::text_access => {
-                if !is_text_script {
-                    return Err(CrawlerErr::CharProcessAlone);
-                }
-            }
-            Rule::value_access => {}
-            Rule::element_access => {}
-            _ => {}
-        }
 
         for pair in script_pair.into_inner() {
             fn get_commands(
@@ -139,7 +125,7 @@ impl CrawlerScript {
     pub(crate) fn get_value_with_element<'a>(
         &self,
         root_element_ref: Vec<ElementRef<'a>>,
-        runtime_variable: &mut HashMap<String, Vec<String>>,
+        runtime_variable: &mut RuntimeVariable,
     ) -> Result<Vec<(String, ElementRef<'a>)>, CrawlerErr> {
         let mut element_values: Vec<(String, ElementRef)> = root_element_ref
             .into_iter()
@@ -323,7 +309,7 @@ impl CrawlerScript {
     pub(crate) fn get_values(
         &self,
         root_element_ref: Vec<ElementRef<'_>>,
-        runtime_variable: &mut HashMap<String, Vec<String>>,
+        runtime_variable: &mut RuntimeVariable,
     ) -> Result<Vec<String>, CrawlerErr> {
         Ok(self
             .get_value_with_element(root_element_ref, runtime_variable)?
@@ -335,65 +321,13 @@ impl CrawlerScript {
     pub(crate) fn get_elements<'a>(
         &self,
         root_element_ref: Vec<ElementRef<'a>>,
-        runtime_variable: &mut HashMap<String, Vec<String>>,
+        runtime_variable: &mut RuntimeVariable,
     ) -> Result<Vec<ElementRef<'a>>, CrawlerErr> {
         Ok(self
             .get_value_with_element(root_element_ref, runtime_variable)?
             .into_iter()
             .map(|(_, element)| element)
             .collect())
-    }
-
-    pub(crate) fn get_text_value(
-        &self,
-        text_value: &str,
-        runtime_variable: &HashMap<String, Vec<String>>,
-    ) -> Result<String, CrawlerErr> {
-        let mut text_value = text_value.to_string();
-        for command in self.commands.clone() {
-            match command {
-                Command::Replace(from, to) => {
-                    let from = from.get_value(&mut HashMap::new())?;
-                    let to = to.get_value(&mut HashMap::new())?;
-                    text_value = text_value.replace(&from, &to);
-                }
-                Command::Uppercase => {
-                    text_value = text_value.to_uppercase();
-                }
-                Command::Lowercase => {
-                    text_value = text_value.to_lowercase();
-                }
-                Command::Append(param) => {
-                    let param = param.get_value(&mut HashMap::new())?;
-                    text_value.push_str(&param);
-                }
-                Command::Prepend(param) => {
-                    let param = param.get_value(&mut HashMap::new())?;
-                    text_value.insert_str(0, &param);
-                }
-                Command::Insert(index, param) => {
-                    let param = param.get_value(&mut HashMap::new())?;
-                    text_value.insert_str(index, &param);
-                }
-                Command::Delete(param) => {
-                    let param = param.get_value(&mut HashMap::new())?;
-                    text_value = text_value.replace(&param, "");
-                }
-                Command::RegexExtract(regex) => {
-                    let regex = Regex::new(&regex.get_value(&mut HashMap::new())?)
-                        .map_err(CrawlerErr::from)?;
-                    text_value = regex.find_iter(&text_value).map(|m| m.as_str()).collect();
-                }
-                Command::RegexReplace(regex, replace) => {
-                    let regex = Regex::new(&regex.get_value(&mut HashMap::new())?)
-                        .map_err(CrawlerErr::from)?;
-                    let replace = replace.get_value(runtime_variable)?;
-                    text_value = regex.replace_all(&text_value, &replace).to_string();
-                }
-                _ => {}
-            }
-        }
-        Ok(text_value)
     }
 }
 
@@ -411,7 +345,7 @@ fn parse_transform_rule(pair: pest::iterators::Pair<Rule>) -> Result<Command, Cr
                 .trim()
                 .parse()
                 .unwrap_or(0);
-            
+
             let param = get_pair_param_with_index(&pair, 1);
             Ok(Command::Insert(index, param))
         }
@@ -578,12 +512,11 @@ impl Display for Param {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::CrawlerErr;
 
     #[test]
     fn test_new_element_access_selector() {
         let script = r#"selector("div.content")"#;
-        let crawler_script = CrawlerScript::new(script, false).unwrap();
+        let crawler_script = CrawlerScript::new(script).unwrap();
 
         assert_eq!(crawler_script.rule, Rule::element_access);
         assert_eq!(crawler_script.commands.len(), 1);
@@ -599,7 +532,7 @@ mod tests {
     #[test]
     fn test_new_element_access_with_multiple_commands() {
         let script = r#"selector("div.content").parent(1).attr("href")"#;
-        let crawler_script = CrawlerScript::new(script, false).unwrap();
+        let crawler_script = CrawlerScript::new(script).unwrap();
 
         assert_eq!(crawler_script.rule, Rule::value_access);
         assert_eq!(crawler_script.commands.len(), 3);
@@ -629,7 +562,7 @@ mod tests {
     #[test]
     fn test_new_value_access() {
         let script = r#"selector("div.content").val().uppercase()"#;
-        let crawler_script = CrawlerScript::new(script, false).unwrap();
+        let crawler_script = CrawlerScript::new(script).unwrap();
 
         assert_eq!(crawler_script.rule, Rule::value_access);
         assert_eq!(crawler_script.commands.len(), 3);
@@ -653,39 +586,9 @@ mod tests {
     }
 
     #[test]
-    fn test_new_text_access() {
-        let script = r#"replace("old", "new").uppercase()"#;
-        let crawler_script = CrawlerScript::new(script, true).unwrap();
-
-        assert_eq!(crawler_script.rule, Rule::text_access);
-        assert_eq!(crawler_script.commands.len(), 2);
-
-        match &crawler_script.commands[0] {
-            Command::Replace(from, to) => {
-                assert_eq!(from.to_string(), "old");
-                assert_eq!(to.to_string(), "new");
-            }
-            _ => panic!("Unexpected first command type"),
-        }
-
-        match &crawler_script.commands[1] {
-            Command::Uppercase => {}
-            _ => panic!("Unexpected second command type"),
-        }
-    }
-
-    #[test]
-    fn test_new_invalid_text_script_for_element_access() {
-        let script = r#"replace("old", "new")"#;
-        let result = CrawlerScript::new(script, false);
-
-        assert!(matches!(result, Err(CrawlerErr::CharProcessAlone)));
-    }
-
-    #[test]
     fn test_new_complex_access_with_conditions() {
         let script = r#"selector("div.content").html().replace("old", "new").equals("result")"#;
-        let crawler_script = CrawlerScript::new(script, false).unwrap();
+        let crawler_script = CrawlerScript::new(script).unwrap();
 
         assert_eq!(crawler_script.rule, Rule::element_access);
         assert_eq!(crawler_script.commands.len(), 4);

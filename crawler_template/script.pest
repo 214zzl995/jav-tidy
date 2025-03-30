@@ -78,6 +78,5 @@ value_access_chain = _{ (element_access_multi ~ ".")? ~ accessor_rule }
 
 element_access =  { SOI ~ element_access_multi ~ EOI }
 value_access   =  { SOI ~ value_access_chain ~ ("." ~ transform_rule)* ~ EOI }
-text_access    =  { SOI ~ transform_rule ~ ("." ~ transform_rule)* ~ EOI }
-script         = _{ SOI ~ (element_access | value_access | text_access) ~ EOI }
+script         = _{ SOI ~ (element_access | value_access ) ~ EOI }
 

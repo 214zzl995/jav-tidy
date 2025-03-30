@@ -1,4 +1,7 @@
-use std::{collections::HashMap, marker::PhantomData};
+use std::{
+    collections::{HashMap, HashSet},
+    marker::PhantomData,
+};
 
 use crate::script::Rule;
 use scraper::ElementRef;
@@ -15,8 +18,9 @@ pub struct Template<T>
 where
     T: CrawlerData + Default + Send,
 {
+    entrypoint: String,
     resource_type: PhantomData<T>,
-    parameters: HashMap<String, Vec<String>>,
+    parameters: RuntimeVariable,
     workflows: Vec<WorkflowRoot>,
 }
 
@@ -41,6 +45,8 @@ struct WorkflowNode {
     children: Vec<WorkflowNode>,
 }
 
+type RuntimeVariable = HashMap<String, Vec<String>>;
+
 pub trait CrawlerData
 where
     Self: Default,
@@ -60,7 +66,7 @@ where
             .insert(key.to_string(), vec![value.to_string()]);
     }
 
-    fn get_start_parameters(&self) -> HashMap<String, Vec<String>> {
+    fn get_start_parameters(&self) -> RuntimeVariable {
         self.parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -71,17 +77,23 @@ where
         let mut value = T::default();
         let mut runtime_variable = self.get_start_parameters();
 
-        for workflow in self.workflows.iter() {
-            let url = runtime_variable
-                .get(&workflow.url_key)
-                .unwrap()
-                .first()
-                .unwrap()
-                .clone();
+        for (index, workflow) in self.workflows.iter().enumerate() {
+            let urls = if index == 0 {
+                vec![self.build_entrypoint_url()?]
+            } else {
+                runtime_variable
+                    .get(&workflow.url_key)
+                    .unwrap_or(&vec![])
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<String>>()
+            };
 
-            workflow
-                .crawler(&url, &mut value, &mut runtime_variable)
-                .await?;
+            for url in urls {
+                workflow
+                    .crawler(&url, &mut value, &mut runtime_variable)
+                    .await?;
+            }
         }
 
         Ok(value)
@@ -91,20 +103,40 @@ where
         let mut value = T::default();
         let mut runtime_variable = self.get_start_parameters();
 
-        for workflow in self.workflows.iter() {
-            let url = runtime_variable
-                .get(&workflow.url_key)
-                .unwrap()
-                .first()
-                .unwrap()
-                .clone();
-
-            workflow
-                .crawler_blocking(&url, &mut value, &mut runtime_variable)
-                .unwrap();
+        for (index, workflow) in self.workflows.iter().enumerate() {
+            let urls = if index == 0 {
+                vec![self.build_entrypoint_url()?]
+            } else {
+                runtime_variable
+                    .get(&workflow.url_key)
+                    .unwrap_or(&vec![])
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<String>>()
+            };
+            for url in urls {
+                workflow
+                    .crawler_blocking(&url, &mut value, &mut runtime_variable)
+                    .unwrap();
+            }
         }
 
         Ok(value)
+    }
+
+    fn build_entrypoint_url(&self) -> Result<String, CrawlerErr> {
+        let mut entrypoint = self.entrypoint.to_string();
+        for (key, values) in self.parameters.iter() {
+            if values.is_empty() {
+                return Err(CrawlerErr::DynNoValidData(key.clone()));
+            }
+            if values.len() > 1 {
+                return Err(CrawlerErr::MultipleEntrypointParameterError(key.clone()));
+            }
+            let value = values[0].clone();
+            entrypoint = entrypoint.replace(&format!("${{{}}}", key), &value);
+        }
+        Ok(entrypoint)
     }
 }
 
@@ -113,7 +145,7 @@ impl WorkflowRoot {
         &'a self,
         url: &str,
         value: &'a mut T,
-        runtime_variable: &'a mut HashMap<String, Vec<String>>,
+        runtime_variable: &'a mut RuntimeVariable,
     ) -> Result<(), CrawlerErr>
     where
         T: CrawlerData + Default,
@@ -137,7 +169,7 @@ impl WorkflowRoot {
         &'a self,
         url: &str,
         value: &'a mut T,
-        runtime_variable: &'a mut HashMap<String, Vec<String>>,
+        runtime_variable: &'a mut RuntimeVariable,
     ) -> Result<(), CrawlerErr>
     where
         T: CrawlerData + Default,
@@ -174,7 +206,7 @@ impl WorkflowNode {
         &self,
         root_element_refs: Vec<ElementRef<'_>>,
         value: &mut T,
-        runtime_variable: &mut HashMap<String, Vec<String>>,
+        runtime_variable: &mut RuntimeVariable,
     ) -> Result<(), CrawlerErr>
     where
         T: CrawlerData + Default,
@@ -195,7 +227,14 @@ impl WorkflowNode {
                     .get_values(root_element_refs, runtime_variable)?;
 
                 value.try_set(&self.name, values.clone())?;
-                runtime_variable.insert(self.name.clone(), values);
+
+                if !runtime_variable.contains_key(&self.name) {
+                    runtime_variable.insert(self.name.clone(), values.clone());
+                }
+                runtime_variable
+                    .get_mut(&self.name)
+                    .unwrap()
+                    .extend(values.clone());
             }
             _ => {}
         };
@@ -234,20 +273,37 @@ where
         D: Deserializer<'de>,
     {
         #[derive(Deserialize, Clone)]
-        #[serde(untagged)]
-        enum TemplateEntrypointRaw {
-            Simple(String),
-            Complex { url: String, script: String },
+        struct TemplateData {
+            entrypoint: String,
+            nodes: HashMap<String, CrawlerNode>,
+            env: Option<RuntimeVariable>,
         }
 
-        #[derive(Deserialize, Clone)]
-        struct TemplateData {
-            entrypoint: TemplateEntrypointRaw,
-            nodes: HashMap<String, CrawlerNode>,
-            env: Option<HashMap<String, Vec<String>>>,
+        fn check_tree_keys_unique(nodes: &HashMap<String, CrawlerNode>) -> Result<(), String> {
+            let mut global_keys = HashSet::new();
+            check_node_keys(nodes, &mut global_keys)
+        }
+
+        fn check_node_keys(
+            nodes: &HashMap<String, CrawlerNode>,
+            seen_keys: &mut HashSet<String>,
+        ) -> Result<(), String> {
+            for (key, node) in nodes {
+                if !seen_keys.insert(key.clone()) {
+                    return Err(format!("Duplicate key '{}' found in tree", key));
+                }
+
+                if let Some(children) = &node.children {
+                    check_node_keys(children, seen_keys)?;
+                }
+            }
+            Ok(())
         }
 
         let data = TemplateData::deserialize(deserializer)?;
+
+        check_tree_keys_unique(&data.nodes)
+            .map_err(|e| serde::de::Error::custom(format!("Duplicate key error: {}", e)))?;
 
         let root_node = WorkflowRoot::new("", data.nodes.clone());
 
@@ -268,24 +324,9 @@ where
 
         collect_requested_nodes(&data.nodes, &mut workflow);
 
-        let envs = data.env.unwrap_or_default();
-
-        let entrypoint = match data.entrypoint {
-            TemplateEntrypointRaw::Simple(url) => url,
-            TemplateEntrypointRaw::Complex { url, script } => {
-                let script = CrawlerScript::new(&script, false)
-                    .map_err(|e| serde::de::Error::custom(format!("Script parse error: {}", e)))?;
-
-                script
-                    .get_text_value(&url, &envs)
-                    .map_err(|e| serde::de::Error::custom(format!("Script parse error: {}", e)))?
-            }
-        };
-
-        workflow[0].url_key = entrypoint;
-
         Ok(Template {
-            parameters: envs,
+            entrypoint: data.entrypoint,
+            parameters: data.env.unwrap_or_default(),
             workflows: workflow,
             resource_type: PhantomData,
         })
@@ -321,7 +362,7 @@ impl<'de> Deserialize<'de> for CrawlerNode {
             CrawlerNodeData::Simple(script) => (script, false, None),
         };
 
-        let script = match CrawlerScript::new(&script_raw, false) {
+        let script = match CrawlerScript::new(&script_raw) {
             Ok(script) => script,
             Err(e) => return Err(serde::de::Error::custom(e.to_string())),
         };
@@ -384,26 +425,62 @@ mod tests {
     #[derive(Default, Debug)]
     struct Movie {
         title: String,
-        thumbnail: String,
-        detail_url: String,
-        tags: Vec<String>,
+        thumbnail: Option<String>,
+        detail_url: Option<String>,
+        tags: Option<Vec<String>>,
+        actors: Vec<String>,
     }
 
     impl CrawlerData for Movie {
         fn try_set(&mut self, field: &str, values: Vec<String>) -> Result<(), CrawlerErr> {
             match field {
-                "title" => self.title = values.first().cloned().unwrap_or_default(),
-                "thumbnail" => self.thumbnail = values.first().cloned().unwrap_or_default(),
-                "detail_url" => self.detail_url = values.first().cloned().unwrap_or_default(),
-                "tags" => {
-                    self.tags = values
-                        .into_iter()
-                        .filter(|v| !v.is_empty())
-                        .collect::<Vec<String>>();
+                "title" => {
+                    if values.len() != 1 {
+                        return Err(CrawlerErr::InvalidValueCount(
+                            "title".to_string(),
+                            values.len(),
+                        ));
+                    }
+                    let value = values[0].parse::<String>().map_err(|err| {
+                        CrawlerErr::ParseError("title".to_string(), err.to_string())
+                    })?;
+                    self.title = value;
+                    Ok(())
                 }
-                _ => return Ok(()),
+                "thumbnail" => {
+                    if values.len() > 1 {
+                        return Err(CrawlerErr::InvalidValueCount(
+                            "thumbnail".to_string(),
+                            values.len(),
+                        ));
+                    }
+                    self.thumbnail = if let Some(v) = values.first() {
+                        Some(v.parse::<String>().map_err(|err| {
+                            CrawlerErr::ParseError("thumbnail".to_string(), err.to_string())
+                        })?)
+                    } else {
+                        None
+                    };
+                    Ok(())
+                }
+                "detail_url" => {
+                    if values.len() > 1 {
+                        return Err(CrawlerErr::InvalidValueCount(
+                            "detail_url".to_string(),
+                            values.len(),
+                        ));
+                    }
+                    self.detail_url = if let Some(v) = values.first() {
+                        Some(v.parse::<String>().map_err(|err| {
+                            CrawlerErr::ParseError("detail_url".to_string(), err.to_string())
+                        })?)
+                    } else {
+                        None
+                    };
+                    Ok(())
+                }
+                _ => Ok(()),
             }
-            Ok(())
         }
     }
 
@@ -416,7 +493,7 @@ mod tests {
         template.add_parameters("base_url", "https://example.com");
 
         assert_eq!(
-            template.workflows[0].url_key,
+            template.build_entrypoint_url().unwrap(),
             "https://example.com/search?q=TEST-001&f=all"
         );
         assert_eq!(template.workflows.len(), 2);
@@ -429,7 +506,7 @@ mod tests {
         rt.block_on(async move {
             let mut server = mockito::Server::new_async().await;
 
-            let host = server.host_with_port();
+            let url = server.url();
 
             let _m = server
                 .mock("GET", "/movies?page=1")
@@ -452,14 +529,15 @@ mod tests {
                 .create();
 
             let mut template = Template::<Movie>::from_yaml(SAMPLE_YAML).unwrap();
-            template.add_parameters("base_url", &host);
+
+            template.add_parameters("base_url", &url);
             template.add_parameters("crawl_name", "TEST-MOVIE");
 
             let result = template.crawler().await.unwrap();
 
-            assert_eq!(result.title, "TEST-MOVIE");
-            assert_eq!(result.thumbnail, "thumbnail.jpg");
-            assert_eq!(result.detail_url, "https://cdn.example.comdetail/123");
+            assert_eq!(result.title, "TEST-MOVIE"); 
+            assert_eq!(result.thumbnail, Some("thumbnail.jpg".to_string()));
+            assert_eq!(result.detail_url, Some("https://cdn.example.comdetail/123".to_string()));
         });
     }
 

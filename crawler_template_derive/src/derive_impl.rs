@@ -76,7 +76,7 @@ fn build_try_set(named: &Punctuated<Field, Comma>) -> syn::Result<Vec<TokenStrea
                                         .iter()
                                         .map(|v| v.parse::<#inner_ty_tokens>().map_err(|err| ::crawler_template::CrawlerErr::ParseError(stringify!(#field_name).to_string(),err.to_string())))
                                         .collect::<Result<Vec<_>, _>>()?;
-                                    self.#field_name = vec;
+                                    self.#field_name.extend(vec);
                                     Ok(())
                                 }
                             });

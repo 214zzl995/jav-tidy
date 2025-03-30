@@ -49,4 +49,6 @@ pub enum CrawlerErr {
     UnsupportedSelectorRule,
     #[error("The crawler script cannot use character processing functions alone")]
     CharProcessAlone,
+    #[error("Entry point environment variable ${{1}} has multiple parameter values.")]
+    MultipleEntrypointParameterError(String),
 }
