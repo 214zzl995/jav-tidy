@@ -51,4 +51,19 @@ pub enum CrawlerErr {
     CharProcessAlone,
     #[error("Entry point environment variable ${{1}} has multiple parameter values.")]
     MultipleEntrypointParameterError(String),
+
+    #[error("{0}")]
+    CrawlerParseError(#[from] CrawlerParseError),
+    #[error("{0}")]
+    CustomError(#[from] Box<dyn std::error::Error>),
+}
+
+#[derive(Debug, Error)]
+pub enum CrawlerParseError {
+    #[error("Parse error: {0}")]
+    MissingField(&'static str),
+    #[error("Parse error: {0}")]
+    ConversionFailed(&'static str),
+    #[error("Parse error: {0}")]
+    EmptyVector(&'static str),
 }

@@ -318,6 +318,7 @@ dependencies = [
 name = "crawler_template"
 version = "0.1.0"
 dependencies = [
+ "crawler_template_macros",
  "mockito",
  "pest",
  "pest_derive",
@@ -331,10 +332,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "crawler_template_derive"
+name = "crawler_template_macros"
 version = "0.1.0"
 dependencies = [
- "crawler_template",
  "proc-macro2",
  "quote",
  "syn 2.0.90",
@@ -1159,7 +1159,6 @@ dependencies = [
  "anyhow",
  "config",
  "crawler_template",
- "crawler_template_derive",
  "fd-lock",
  "file-id",
  "flexi_logger",

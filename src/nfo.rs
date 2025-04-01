@@ -1,4 +1,4 @@
-use crawler_template_derive::Crawler;
+use crawler_template::Crawler;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -94,6 +94,7 @@ pub struct UniqueId {
     #[serde(rename = "$value")]
     pub value: String,
 }
+
 
 #[derive(Debug, Default, Crawler)]
 pub struct CrawlerNfo {

@@ -14,7 +14,7 @@ pub fn initial(config: &AppConfig, file_rx: mpsc::Receiver<PathBuf>) -> anyhow::
             Ok(())
         },
         |task_id: String, status: TaskStatus| {
-            
+    
         },
     );
     Ok(())
@@ -23,5 +23,16 @@ pub fn initial(config: &AppConfig, file_rx: mpsc::Receiver<PathBuf>) -> anyhow::
 impl CrawlerNfo {
     async fn crawler(path: &PathBuf) -> anyhow::Result<Self> {
         Ok(Self::default())
+    }
+}
+
+struct Test(String);
+
+
+impl TryFrom<String> for Test {
+    type Error = anyhow::Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Ok(Test(value))
     }
 }

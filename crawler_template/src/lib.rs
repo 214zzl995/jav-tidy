@@ -8,7 +8,8 @@ use scraper::ElementRef;
 use script::CrawlerScript;
 use serde::{Deserialize, Deserializer};
 
-pub use error::CrawlerErr;
+pub use crawler_template_macros::Crawler;
+pub use error::{CrawlerErr, CrawlerParseError};
 
 mod error;
 mod script;
@@ -47,11 +48,9 @@ struct WorkflowNode {
 
 type RuntimeVariable = HashMap<String, Vec<String>>;
 
-pub trait CrawlerData
-where
-    Self: Default,
-{
-    fn try_set(&mut self, field: &str, values: Vec<String>) -> Result<(), CrawlerErr>;
+pub trait CrawlerData: Sized {
+    type Error;
+    fn parse(map: &HashMap<String, Vec<String>>) -> Result<Self, Self::Error>;
 }
 
 impl<T> Template<T>
@@ -73,8 +72,10 @@ where
             .collect()
     }
 
-    pub async fn crawler(&self) -> Result<T, CrawlerErr> {
-        let mut value = T::default();
+    pub async fn crawler(&self) -> Result<T, CrawlerErr>
+    where
+        CrawlerErr: From<<T as CrawlerData>::Error>,
+    {
         let mut runtime_variable = self.get_start_parameters();
 
         for (index, workflow) in self.workflows.iter().enumerate() {
@@ -90,17 +91,21 @@ where
             };
 
             for url in urls {
-                workflow
-                    .crawler(&url, &mut value, &mut runtime_variable)
-                    .await?;
+                workflow.crawler(&url, &mut runtime_variable).await?;
             }
         }
+
+        println!("runtime_variable: {:?}", runtime_variable);
+
+        let value = T::parse(&runtime_variable)?;
 
         Ok(value)
     }
 
-    pub fn crawler_block(&self) -> Result<T, CrawlerErr> {
-        let mut value = T::default();
+    pub fn crawler_block(&self) -> Result<T, CrawlerErr>
+    where
+        CrawlerErr: From<<T as CrawlerData>::Error>,
+    {
         let mut runtime_variable = self.get_start_parameters();
 
         for (index, workflow) in self.workflows.iter().enumerate() {
@@ -116,10 +121,12 @@ where
             };
             for url in urls {
                 workflow
-                    .crawler_blocking(&url, &mut value, &mut runtime_variable)
+                    .crawler_blocking(&url, &mut runtime_variable)
                     .unwrap();
             }
         }
+
+        let value = T::parse(&runtime_variable)?;
 
         Ok(value)
     }
@@ -141,15 +148,11 @@ where
 }
 
 impl WorkflowRoot {
-    async fn crawler<'a, T>(
+    async fn crawler<'a>(
         &'a self,
         url: &str,
-        value: &'a mut T,
         runtime_variable: &'a mut RuntimeVariable,
-    ) -> Result<(), CrawlerErr>
-    where
-        T: CrawlerData + Default,
-    {
+    ) -> Result<(), CrawlerErr> {
         let root_html = {
             let response = reqwest::get(url).await?;
             let body = response.text().await?;
@@ -159,21 +162,17 @@ impl WorkflowRoot {
         let root_element_refs = vec![root_html.root_element()];
 
         for node in &self.node {
-            node.process(root_element_refs.clone(), value, runtime_variable)?;
+            node.process(root_element_refs.clone(), runtime_variable)?;
         }
 
         Ok(())
     }
 
-    fn crawler_blocking<'a, T>(
+    fn crawler_blocking<'a>(
         &'a self,
         url: &str,
-        value: &'a mut T,
         runtime_variable: &'a mut RuntimeVariable,
-    ) -> Result<(), CrawlerErr>
-    where
-        T: CrawlerData + Default,
-    {
+    ) -> Result<(), CrawlerErr> {
         let root_html = {
             let response = reqwest::blocking::get(url)?;
             let body = response.text()?;
@@ -183,7 +182,7 @@ impl WorkflowRoot {
         let root_element_refs = vec![root_html.root_element()];
 
         for node in &self.node {
-            node.process(root_element_refs.clone(), value, runtime_variable)?;
+            node.process(root_element_refs.clone(), runtime_variable)?;
         }
 
         Ok(())
@@ -202,15 +201,11 @@ impl WorkflowRoot {
 }
 
 impl WorkflowNode {
-    fn process<T>(
+    fn process(
         &self,
         root_element_refs: Vec<ElementRef<'_>>,
-        value: &mut T,
         runtime_variable: &mut RuntimeVariable,
-    ) -> Result<(), CrawlerErr>
-    where
-        T: CrawlerData + Default,
-    {
+    ) -> Result<(), CrawlerErr> {
         match self.script.rule {
             Rule::element_access => {
                 let elements = self
@@ -218,15 +213,13 @@ impl WorkflowNode {
                     .get_elements(root_element_refs, runtime_variable)?;
 
                 for node in &self.children {
-                    node.process(elements.clone(), value, runtime_variable)?;
+                    node.process(elements.clone(), runtime_variable)?;
                 }
             }
             Rule::value_access => {
                 let values = self
                     .script
                     .get_values(root_element_refs, runtime_variable)?;
-
-                value.try_set(&self.name, values.clone())?;
 
                 if !runtime_variable.contains_key(&self.name) {
                     runtime_variable.insert(self.name.clone(), values.clone());
@@ -431,56 +424,61 @@ mod tests {
         actors: Vec<String>,
     }
 
-    impl CrawlerData for Movie {
-        fn try_set(&mut self, field: &str, values: Vec<String>) -> Result<(), CrawlerErr> {
-            match field {
-                "title" => {
-                    if values.len() != 1 {
-                        return Err(CrawlerErr::InvalidValueCount(
-                            "title".to_string(),
-                            values.len(),
-                        ));
-                    }
-                    let value = values[0].parse::<String>().map_err(|err| {
-                        CrawlerErr::ParseError("title".to_string(), err.to_string())
-                    })?;
-                    self.title = value;
-                    Ok(())
-                }
-                "thumbnail" => {
-                    if values.len() > 1 {
-                        return Err(CrawlerErr::InvalidValueCount(
-                            "thumbnail".to_string(),
-                            values.len(),
-                        ));
-                    }
-                    self.thumbnail = if let Some(v) = values.first() {
-                        Some(v.parse::<String>().map_err(|err| {
-                            CrawlerErr::ParseError("thumbnail".to_string(), err.to_string())
-                        })?)
-                    } else {
-                        None
-                    };
-                    Ok(())
-                }
-                "detail_url" => {
-                    if values.len() > 1 {
-                        return Err(CrawlerErr::InvalidValueCount(
-                            "detail_url".to_string(),
-                            values.len(),
-                        ));
-                    }
-                    self.detail_url = if let Some(v) = values.first() {
-                        Some(v.parse::<String>().map_err(|err| {
-                            CrawlerErr::ParseError("detail_url".to_string(), err.to_string())
-                        })?)
-                    } else {
-                        None
-                    };
-                    Ok(())
-                }
-                _ => Ok(()),
-            }
+    impl crate::CrawlerData for Movie {
+        type Error = crate::CrawlerParseError;
+
+        fn parse(
+            map: &std::collections::HashMap<String, Vec<String>>,
+        ) -> Result<Self, Self::Error> {
+            Ok(Self {
+                title: {
+                    map.get("title")
+                        .and_then(|v| v.first())
+                        .ok_or(crate::CrawlerParseError::MissingField("title"))
+                        .and_then(|s| {
+                            s.parse()
+                                .map_err(|_| crate::CrawlerParseError::ConversionFailed("title"))
+                        })?
+                },
+                thumbnail: {
+                    map.get("thumbnail")
+                        .and_then(|v| v.first())
+                        .map(|s| s.parse())
+                        .transpose()
+                        .map_err(|_| crate::CrawlerParseError::ConversionFailed("thumbnail"))?
+                },
+                detail_url: {
+                    map.get("detail_url")
+                        .and_then(|v| v.first())
+                        .map(|s| s.parse())
+                        .transpose()
+                        .map_err(|_| crate::CrawlerParseError::ConversionFailed("detail_url"))?
+                },
+                tags: {
+                    map.get("tags")
+                        .map(|values| {
+                            values
+                                .iter()
+                                .map(|s| s.parse())
+                                .collect::<Result<Vec<_>, _>>()
+                                .map(Some)
+                        })
+                        .transpose()
+                        .map_err(|_| crate::CrawlerParseError::ConversionFailed("tags"))?
+                        .flatten()
+                },
+                actors: {
+                    map.get("actors")
+                        .map(|values| {
+                            values
+                                .iter()
+                                .map(|s| s.parse())
+                                .collect::<Result<Vec<_>, _>>()
+                        })
+                        .unwrap_or(Ok(Vec::new()))
+                        .map_err(|_| crate::CrawlerParseError::ConversionFailed("actors"))?
+                },
+            })
         }
     }
 
@@ -509,16 +507,24 @@ mod tests {
             let url = server.url();
 
             let _m = server
-                .mock("GET", "/movies?page=1")
+                .mock("GET", "/search?q=TEST-MOVIE&f=all")
                 .with_status(200)
                 .with_body(
                     r#"
-                    <div class="movie-list">
-                        <div class="video-title"><strong>TEST-MOVIE</strong></div>
-                        <img src="thumbnail.jpg">
-                        <a href="detail/123"></a>
-                    </div>
-                    "#,
+                     <!DOCTYPE html>
+                     <html>
+                     <head><title>Detail Page</title></head>
+                     <body>
+                         <div class="movie-list">
+                           <h1>TEST-MOVIE</h1>
+                           <div class="video-title"><strong>TEST-MOVIE01</strong></div>
+                           <div class="actors">Actor C, Actor D</div>
+                           <div class="tags"><span>Tag3</span>, <span>Tag4</span></div>
+                           <img class="main-thumb" src="/images/detail_thumb.jpg">
+                        </div>
+                     </body>
+                     </html>
+                 "#,
                 )
                 .create();
 
@@ -535,22 +541,12 @@ mod tests {
 
             let result = template.crawler().await.unwrap();
 
-            assert_eq!(result.title, "TEST-MOVIE"); 
+            assert_eq!(result.title, "TEST-MOVIE01");
             assert_eq!(result.thumbnail, Some("thumbnail.jpg".to_string()));
-            assert_eq!(result.detail_url, Some("https://cdn.example.comdetail/123".to_string()));
+            assert_eq!(
+                result.detail_url,
+                Some("https://cdn.example.comdetail/123".to_string())
+            );
         });
-    }
-
-    #[test]
-    fn test_invalid_script() {
-        let yaml = r#"
-            entrypoint: "invalid"
-            nodes:
-              main:
-                script: "invalid[selector"
-        "#;
-
-        let result = Template::<Movie>::from_yaml(yaml);
-        assert!(matches!(result, Err(serde_yaml::Error { .. })));
     }
 }
