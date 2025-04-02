@@ -13,6 +13,7 @@ pub use error::{CrawlerErr, CrawlerParseError};
 
 mod error;
 mod script;
+mod test;
 
 #[derive(Debug, Clone)]
 pub struct Template<T>
@@ -90,12 +91,14 @@ where
                     .collect::<Vec<String>>()
             };
 
+            if urls.is_empty() {
+                break;
+            }
+
             for url in urls {
                 workflow.crawler(&url, &mut runtime_variable).await?;
             }
         }
-
-        println!("runtime_variable: {:?}", runtime_variable);
 
         let value = T::parse(&runtime_variable)?;
 
@@ -223,11 +226,12 @@ impl WorkflowNode {
 
                 if !runtime_variable.contains_key(&self.name) {
                     runtime_variable.insert(self.name.clone(), values.clone());
+                } else {
+                    runtime_variable
+                        .get_mut(&self.name)
+                        .unwrap()
+                        .extend(values.clone());
                 }
-                runtime_variable
-                    .get_mut(&self.name)
-                    .unwrap()
-                    .extend(values.clone());
             }
             _ => {}
         };
@@ -408,145 +412,5 @@ impl From<WorkflowNodeWithName> for WorkflowNode {
                 }
             }),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[derive(Default, Debug)]
-    struct Movie {
-        title: String,
-        thumbnail: Option<String>,
-        detail_url: Option<String>,
-        tags: Option<Vec<String>>,
-        actors: Vec<String>,
-    }
-
-    impl crate::CrawlerData for Movie {
-        type Error = crate::CrawlerParseError;
-
-        fn parse(
-            map: &std::collections::HashMap<String, Vec<String>>,
-        ) -> Result<Self, Self::Error> {
-            Ok(Self {
-                title: {
-                    map.get("title")
-                        .and_then(|v| v.first())
-                        .ok_or(crate::CrawlerParseError::MissingField("title"))
-                        .and_then(|s| {
-                            s.parse()
-                                .map_err(|_| crate::CrawlerParseError::ConversionFailed("title"))
-                        })?
-                },
-                thumbnail: {
-                    map.get("thumbnail")
-                        .and_then(|v| v.first())
-                        .map(|s| s.parse())
-                        .transpose()
-                        .map_err(|_| crate::CrawlerParseError::ConversionFailed("thumbnail"))?
-                },
-                detail_url: {
-                    map.get("detail_url")
-                        .and_then(|v| v.first())
-                        .map(|s| s.parse())
-                        .transpose()
-                        .map_err(|_| crate::CrawlerParseError::ConversionFailed("detail_url"))?
-                },
-                tags: {
-                    map.get("tags")
-                        .map(|values| {
-                            values
-                                .iter()
-                                .map(|s| s.parse())
-                                .collect::<Result<Vec<_>, _>>()
-                                .map(Some)
-                        })
-                        .transpose()
-                        .map_err(|_| crate::CrawlerParseError::ConversionFailed("tags"))?
-                        .flatten()
-                },
-                actors: {
-                    map.get("actors")
-                        .map(|values| {
-                            values
-                                .iter()
-                                .map(|s| s.parse())
-                                .collect::<Result<Vec<_>, _>>()
-                        })
-                        .unwrap_or(Ok(Vec::new()))
-                        .map_err(|_| crate::CrawlerParseError::ConversionFailed("actors"))?
-                },
-            })
-        }
-    }
-
-    const SAMPLE_YAML: &str = include_str!("../template/sample.yaml");
-
-    #[test]
-    fn test_workflow_format() {
-        let mut template = Template::<Movie>::from_yaml(SAMPLE_YAML).unwrap();
-        template.add_parameters("crawl_name", "TEST-001");
-        template.add_parameters("base_url", "https://example.com");
-
-        assert_eq!(
-            template.build_entrypoint_url().unwrap(),
-            "https://example.com/search?q=TEST-001&f=all"
-        );
-        assert_eq!(template.workflows.len(), 2);
-    }
-
-    #[test]
-    fn test_workflow_execution() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-
-        rt.block_on(async move {
-            let mut server = mockito::Server::new_async().await;
-
-            let url = server.url();
-
-            let _m = server
-                .mock("GET", "/search?q=TEST-MOVIE&f=all")
-                .with_status(200)
-                .with_body(
-                    r#"
-                     <!DOCTYPE html>
-                     <html>
-                     <head><title>Detail Page</title></head>
-                     <body>
-                         <div class="movie-list">
-                           <h1>TEST-MOVIE</h1>
-                           <div class="video-title"><strong>TEST-MOVIE01</strong></div>
-                           <div class="actors">Actor C, Actor D</div>
-                           <div class="tags"><span>Tag3</span>, <span>Tag4</span></div>
-                           <img class="main-thumb" src="/images/detail_thumb.jpg">
-                        </div>
-                     </body>
-                     </html>
-                 "#,
-                )
-                .create();
-
-            let _m2 = server
-                .mock("GET", "/detail/123")
-                .with_status(200)
-                .with_body("<div class='detail'>...</div>")
-                .create();
-
-            let mut template = Template::<Movie>::from_yaml(SAMPLE_YAML).unwrap();
-
-            template.add_parameters("base_url", &url);
-            template.add_parameters("crawl_name", "TEST-MOVIE");
-
-            let result = template.crawler().await.unwrap();
-
-            assert_eq!(result.title, "TEST-MOVIE01");
-            assert_eq!(result.thumbnail, Some("thumbnail.jpg".to_string()));
-            assert_eq!(
-                result.detail_url,
-                Some("https://cdn.example.comdetail/123".to_string())
-            );
-        });
     }
 }

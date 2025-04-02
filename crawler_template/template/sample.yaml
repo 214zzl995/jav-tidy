@@ -6,7 +6,7 @@ nodes:
     script: selector(".movie-list")
     children:
       match_div:
-        script: selector(".video-title>strong").val().delete("-").uppercase().equals(${crawl_name}).parent(2)
+        script: selector(".video-title>strong").val().uppercase().equals(${crawl_name}).parent(2)
         children:
           name: selector(".video-title>strong").val()
           title: attr("title")
@@ -23,9 +23,3 @@ nodes:
                 children:
                   tags: val().delete(" ").equals("類別:").nth().selector("a").val()
                   actors: val().delete(" ").equals("演員:").nth().selector(".female").prev().val()
-                  release_time: val().delete(" ").equals("日期:").nth().val()
-                  duration: val().delete(" ").equals("時長:").nth().val().delete(" 分鍾")
-                  director: val().delete(" ").equals("導演:").nth().val()
-                  series: val().delete(" ").equals("系列:").nth().val()
-                  publisher: val().delete(" ").equals("發行:").nth().val()
-                  makers: val().delete(" ").equals("片商:").nth().val()
