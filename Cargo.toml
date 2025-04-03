@@ -55,3 +55,4 @@ parking_lot = { workspace = true }
 fd-lock = "4.0.4"
 crawler_template = { workspace = true }
 runner = { workspace = true }
+quick-xml = { version = "0.37", features = ["serialize"] }
