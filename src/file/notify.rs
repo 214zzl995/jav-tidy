@@ -7,6 +7,7 @@ use notify::{Config, Error, Event, RecommendedWatcher, Watcher};
 use parking_lot::Mutex;
 use tokio::sync::mpsc;
 
+#[cfg(target_os = "windows")]
 use super::is_recycle_bin;
 
 #[derive(Clone)]
