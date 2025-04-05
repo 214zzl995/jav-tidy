@@ -7,9 +7,9 @@ pub enum CrawlerErr {
     NotFound { node: &'static str },
     #[error("IO错误:{msg}")]
     IOError { msg: String },
-    #[error("其他错误")]
-    OtherError,
-    #[error("模板未找到")]
+    #[error("Other error: {0}")]
+    OtherError(String),
+    #[error("Template not found")]
     TempNotFound,
     #[error("Template internal information error, error cause: {0}")]
     YamlTempFormatError(#[from] serde_yaml::Error),
