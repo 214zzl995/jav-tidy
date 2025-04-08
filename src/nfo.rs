@@ -267,3 +267,18 @@ pub struct MovieNfoCrawler {
     pub tags: Vec<String>,
     pub studios: Vec<String>,
 }
+
+impl From<MovieNfoCrawler> for MovieNfo {
+    fn from(crawler: MovieNfoCrawler) -> Self {
+        MovieNfo {
+            title: crawler.title,
+            rating: crawler.rating,
+            top250: crawler.top250,
+            release_date: crawler.release_date.unwrap_or_default(),
+            runtime: crawler.runtime,
+            tags: crawler.tags,
+            studios: crawler.studios,
+            ..Default::default()
+        }
+    }
+}

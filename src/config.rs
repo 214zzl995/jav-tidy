@@ -13,6 +13,12 @@ pub(crate) struct AppConfig {
     output_dir: PathBuf,
     pub thread_limit: usize,
     pub template_priority: Vec<String>,
+    #[serde(default = "default_maximum_fetch_count")]
+    pub maximum_fetch_count: usize,
+}
+
+fn default_maximum_fetch_count() -> usize {
+    3
 }
 
 impl AppConfig {
@@ -24,8 +30,6 @@ impl AppConfig {
             .unwrap();
 
         let config: AppConfig = settings.try_deserialize()?;
-
-        
 
         Ok(config)
     }
@@ -51,5 +55,16 @@ impl AppConfig {
         self.template_priority
             .iter()
             .position(|t| t == template)
+    }
+
+    pub fn clean_file_name(&self, file_name: &str) -> String {
+        let mut name = file_name.to_string();
+        if self.capital {
+            name = name.to_lowercase();
+        }
+        for pattern in &self.ignored_id_pattern {
+            name = name.replace(pattern, "");
+        }
+        name.to_uppercase()
     }
 }

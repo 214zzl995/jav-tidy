@@ -44,7 +44,7 @@ serde = { workspace = true, features = ["derive"] }
 regex = { workspace = true }
 config = "0.14.0"
 structopt = "0.3"
-flexi_logger = "0.27"
+flexi_logger = "0.30"
 log = { workspace = true }
 notify = { version = "6.1.1", default-features = false, features = [
   "macos_kqueue",
@@ -56,3 +56,5 @@ fd-lock = "4.0.4"
 crawler_template = { workspace = true }
 quick-xml = { version = "0.37", features = ["serialize"] }
 serde_yaml = { workspace = true }
+indicatif = "*"
+indicatif-log-bridge = "0.2.3"

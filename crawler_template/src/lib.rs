@@ -61,10 +61,6 @@ where
     pub fn from_yaml(yaml: &str) -> Result<Self, serde_yaml::Error> {
         serde_yaml::from_str(yaml)
     }
-    pub fn add_parameters(&mut self, key: &str, value: &str) {
-        self.parameters
-            .insert(key.to_string(), vec![value.to_string()]);
-    }
 
     fn get_start_parameters(&self) -> RuntimeVariable {
         self.parameters
@@ -73,15 +69,19 @@ where
             .collect()
     }
 
-    pub async fn crawler(&self) -> Result<T, CrawlerErr>
+    pub async fn crawler(&self, parameters: &HashMap<&str, String>) -> Result<T, CrawlerErr>
     where
         CrawlerErr: From<<T as CrawlerData>::Error>,
     {
         let mut runtime_variable = self.get_start_parameters();
 
+        for (key, value) in parameters.iter() {
+            runtime_variable.insert(key.to_string(), vec![value.clone()]);
+        }
+
         for (index, workflow) in self.workflows.iter().enumerate() {
             let urls = if index == 0 {
-                vec![self.build_entrypoint_url()?]
+                vec![self.build_entrypoint_url(&runtime_variable)?]
             } else {
                 runtime_variable
                     .get(&workflow.url_key)
@@ -105,15 +105,19 @@ where
         Ok(value)
     }
 
-    pub fn crawler_block(&self) -> Result<T, CrawlerErr>
+    pub fn crawler_block(&self, parameters: &HashMap<&str, String>) -> Result<T, CrawlerErr>
     where
         CrawlerErr: From<<T as CrawlerData>::Error>,
     {
         let mut runtime_variable = self.get_start_parameters();
 
+        for (key, value) in parameters.iter() {
+            runtime_variable.insert(key.to_string(), vec![value.clone()]);
+        }
+
         for (index, workflow) in self.workflows.iter().enumerate() {
             let urls = if index == 0 {
-                vec![self.build_entrypoint_url()?]
+                vec![self.build_entrypoint_url(&runtime_variable)?]
             } else {
                 runtime_variable
                     .get(&workflow.url_key)
@@ -134,9 +138,12 @@ where
         Ok(value)
     }
 
-    fn build_entrypoint_url(&self) -> Result<String, CrawlerErr> {
+    fn build_entrypoint_url(
+        &self,
+        parameters: &HashMap<String, Vec<String>>,
+    ) -> Result<String, CrawlerErr> {
         let mut entrypoint = self.entrypoint.to_string();
-        for (key, values) in self.parameters.iter() {
+        for (key, values) in parameters.iter() {
             if values.is_empty() {
                 return Err(CrawlerErr::DynNoValidData(key.clone()));
             }

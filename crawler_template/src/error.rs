@@ -54,8 +54,7 @@ pub enum CrawlerErr {
 
     #[error("{0}")]
     CrawlerParseError(#[from] CrawlerParseError),
-    #[error("{0}")]
-    CustomError(#[from] Box<dyn std::error::Error>),
+    
 }
 
 #[derive(Debug, Error)]

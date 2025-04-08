@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 mod notify;
 
@@ -8,7 +8,10 @@ use tokio::sync::mpsc;
 
 use crate::config::AppConfig;
 
-pub async fn initial(config: &AppConfig, return_tx: mpsc::Sender<PathBuf>) -> anyhow::Result<SourceNotify> {
+pub async fn initial(
+    config: &AppConfig,
+    return_tx: mpsc::Sender<PathBuf>,
+) -> anyhow::Result<SourceNotify> {
     let migrate_files_ext = config.get_migrate_files_ext();
 
     let return_tx_notify = return_tx.clone();

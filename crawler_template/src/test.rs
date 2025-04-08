@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::Template;
 
     #[derive(Default, Debug)]
@@ -76,19 +78,6 @@ mod tests {
     }
 
     #[test]
-    fn test_workflow_format() {
-        let mut template = Template::<Movie>::from_yaml(SAMPLE_YAML).unwrap();
-        template.add_parameters("crawl_name", "TEST-001");
-        template.add_parameters("base_url", "https://example.com");
-
-        assert_eq!(
-            template.build_entrypoint_url().unwrap(),
-            "https://example.com/search?q=TEST-001&f=all"
-        );
-        assert_eq!(template.workflows.len(), 2);
-    }
-
-    #[test]
     fn test_workflow_execution() {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -109,12 +98,14 @@ mod tests {
                 .with_body(SAMPLE_DETAIL)
                 .create();
 
-            let mut template = Template::<Movie>::from_yaml(SAMPLE_YAML).unwrap();
+            let template = Template::<Movie>::from_yaml(SAMPLE_YAML).unwrap();
 
-            template.add_parameters("base_url", &url);
-            template.add_parameters("crawl_name", "TEST-MOVIE1");
+            let mut init_params = HashMap::new();
+            init_params.insert("base_url", url.clone());
+            init_params.insert("crawl_name", "TEST-MOVIE1".to_string());
 
-            let result = template.crawler().await.unwrap();
+
+            let result = template.crawler(&init_params).await.unwrap();
 
             assert_eq!(result.title, "TEST-MOVIE1 的title");
             assert_eq!(
