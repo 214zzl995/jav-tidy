@@ -23,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
     let (file_tx, file_rx) = tokio::sync::mpsc::channel(8);
     let _source_notify = file::initial(&config, file_tx).await?;
 
-    crawler::initial(&config, file_rx)?;
+    crawler::initial(&arg.template_location, &config, file_rx)?;
 
     Ok(())
 }

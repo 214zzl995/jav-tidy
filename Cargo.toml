@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "runner", "crawler_template"]
+members = [".",  "crawler_template"]
 
 [workspace.package]
 authors = ["wei"]
@@ -20,9 +20,9 @@ futures-util = "0.3.21"
 parking_lot = "0.12"
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1.4", features = ["v4", "fast-rng", "macro-diagnostics"] }
-runner = { path = "runner" }
 crawler_template = { path = "crawler_template" }
 log = "0.4"
+serde_yaml = "0.9.34"
 
 
 [profile.release]
@@ -54,5 +54,5 @@ walkdir = "2"
 parking_lot = { workspace = true }
 fd-lock = "4.0.4"
 crawler_template = { workspace = true }
-runner = { workspace = true }
 quick-xml = { version = "0.37", features = ["serialize"] }
+serde_yaml = { workspace = true }

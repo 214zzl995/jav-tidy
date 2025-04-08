@@ -12,6 +12,7 @@ pub(crate) struct AppConfig {
     pub input_dir: PathBuf,
     output_dir: PathBuf,
     pub thread_limit: usize,
+    pub template_priority: Vec<String>,
 }
 
 impl AppConfig {
@@ -38,5 +39,17 @@ impl AppConfig {
             .collect();
 
         Box::leak(leaked_strs.into_boxed_slice())
+    }
+
+    pub fn is_useing_template(&self, template: &str) -> bool {
+        self.template_priority
+            .iter()
+            .any(|t| t == template)
+    }
+
+    pub fn get_template_index(&self, template: &str) -> Option<usize> {
+        self.template_priority
+            .iter()
+            .position(|t| t == template)
     }
 }
