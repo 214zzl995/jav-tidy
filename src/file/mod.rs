@@ -1,3 +1,5 @@
+#[cfg(target_os = "windows")]
+use std::path::Path;
 use std::path::PathBuf;
 
 mod notify;

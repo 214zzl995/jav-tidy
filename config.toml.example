@@ -1,0 +1,54 @@
+# JAV-Tidy 配置文件示例
+# 请复制此文件为 config.toml 并根据需要修改
+
+# ===== 文件处理配置 =====
+
+# 要处理的文件扩展名（不包含点号）
+migrate_files = ["mp4", "mkv", "avi", "wmv", "flv", "mov"]
+
+# 是否同时处理字幕文件
+migrate_subtitles = true
+
+# 要从文件名中忽略的模式（用于清理文件名）
+ignored_id_pattern = [
+    "-HD", "-FHD", "-4K", "-1080p", "-720p", "-480p",
+    ".uncensored", ".leaked", ".chinese", ".subtitled",
+    "_", ".", "-", " "
+]
+
+# 是否将处理后的文件名转为小写
+capital = false
+
+# ===== 目录配置 =====
+
+# 输入目录 - 监控新文件的目录
+input_dir = "./input"
+
+# 输出目录 - 处理完成的文件存放目录
+output_dir = "./output"
+
+# ===== 性能配置 =====
+
+# 并发处理的最大线程数
+thread_limit = 4
+
+# 每个影片最多获取的NFO数据源数量
+maximum_fetch_count = 3
+
+# ===== 爬虫模板配置 =====
+
+# 模板优先级（按顺序尝试，第一个成功则停止）
+# 对应 template/ 目录下的 .yaml 文件名
+template_priority = [
+    "javdb.yaml",
+    # 可以添加更多模板
+    # "javlibrary.yaml",
+    # "dmm.yaml"
+]
+
+# ===== 高级配置 =====
+
+# 文件名清理规则示例：
+# 原文件: "IPX-001_1080p_chinese_subtitled.mp4"
+# 清理后: "IPX001" (用于搜索)
+# 最终文件名: "IPX-001 [标题].mp4" 

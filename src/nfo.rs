@@ -258,7 +258,6 @@ pub struct MovieNfo {
 
 #[derive(Debug, Default, Clone, Crawler)]
 pub struct MovieNfoCrawler {
-    pub id: String,
     pub title: String,
     pub rating: Option<f32>,
     pub top250: Option<u32>,

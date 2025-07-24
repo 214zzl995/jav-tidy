@@ -11,6 +11,7 @@ pub(crate) struct AppConfig {
     capital: bool,
     pub input_dir: PathBuf,
     output_dir: PathBuf,
+    #[allow(dead_code)] // 预留给未来的并发控制功能
     pub thread_limit: usize,
     pub template_priority: Vec<String>,
     #[serde(default = "default_maximum_fetch_count")]
@@ -57,14 +58,23 @@ impl AppConfig {
             .position(|t| t == template)
     }
 
-    pub fn clean_file_name(&self, file_name: &str) -> String {
-        let mut name = file_name.to_string();
-        if self.capital {
-            name = name.to_lowercase();
-        }
-        for pattern in &self.ignored_id_pattern {
-            name = name.replace(pattern, "");
-        }
-        name.to_uppercase()
+    /// 获取要忽略的ID模式列表
+    pub fn get_ignored_id_pattern(&self) -> &[String] {
+        &self.ignored_id_pattern
+    }
+
+    /// 获取是否将文件名转为小写的配置
+    pub fn is_capital(&self) -> bool {
+        self.capital
+    }
+
+    /// 获取输出目录
+    pub fn get_output_dir(&self) -> &std::path::Path {
+        &self.output_dir
+    }
+
+    /// 获取是否需要迁移字幕文件的配置
+    pub fn migrate_subtitles(&self) -> bool {
+        self.migrate_subtitles
     }
 }

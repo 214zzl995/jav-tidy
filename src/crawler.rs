@@ -7,6 +7,9 @@ use std::{
 use crate::{
     config::AppConfig,
     nfo::{MovieNfo, MovieNfoCrawler},
+    parser::FileNameParser,
+    nfo_generator::NfoGenerator,
+    file_organizer::FileOrganizer,
 };
 use anyhow::Context;
 use crawler_template::Template;
@@ -26,6 +29,118 @@ pub fn initial(
             .with_context(|| format!("get template from {}", template_path.display()))?,
     );
 
+    let config = Arc::new(config.clone());
+    
+    // 启动文件处理任务
+    tokio::spawn(process_file_queue(
+        file_rx,
+        templates,
+        config,
+        multi_progress,
+    ));
+
+    Ok(())
+}
+
+/// 文件处理队列的主循环
+async fn process_file_queue(
+    mut file_rx: mpsc::Receiver<PathBuf>,
+    templates: Templates,
+    config: Arc<AppConfig>,
+    multi_progress: MultiProgress,
+) {
+    log::info!("文件处理队列已启动");
+    
+    // 创建工具实例
+    let parser = match FileNameParser::new() {
+        Ok(p) => p,
+        Err(e) => {
+            log::error!("创建文件名解析器失败: {}", e);
+            return;
+        }
+    };
+    
+    let nfo_generator = NfoGenerator::new();
+    let file_organizer = FileOrganizer::new();
+    
+    // 处理文件队列
+    while let Some(file_path) = file_rx.recv().await {
+        log::info!("接收到新文件: {}", file_path.display());
+        
+        // 创建进度条
+        let progress_bar = get_progress_bar(&multi_progress, &format!("处理文件: {}", file_path.file_name().unwrap_or_default().to_str().unwrap_or("未知")));
+        
+        // 处理单个文件
+        if let Err(e) = process_single_file(
+            &file_path,
+            &parser,
+            &nfo_generator,
+            &file_organizer,
+            &templates,
+            &config,
+            &progress_bar,
+        ).await {
+            log::error!("处理文件 {} 失败: {}", file_path.display(), e);
+            progress_bar.finish_with_message("处理失败");
+        } else {
+            progress_bar.finish_with_message("处理完成");
+        }
+        
+        // 移除进度条
+        multi_progress.remove(&progress_bar);
+    }
+    
+    log::info!("文件处理队列已停止");
+}
+
+/// 处理单个文件
+async fn process_single_file(
+    file_path: &Path,
+    parser: &FileNameParser,
+    nfo_generator: &NfoGenerator,
+    file_organizer: &FileOrganizer,
+    templates: &Templates,
+    config: &AppConfig,
+    progress_bar: &ProgressBar,
+) -> anyhow::Result<()> {
+    progress_bar.set_message("解析文件名...");
+    
+    // 1. 从文件名提取影片ID
+    let movie_id = parser
+        .extract_movie_id(file_path, config)
+        .ok_or_else(|| anyhow::anyhow!("无法从文件名提取影片ID"))?;
+    
+    log::info!("提取到影片ID: {}", movie_id);
+    progress_bar.set_message(format!("搜索影片信息: {}", movie_id));
+    
+    // 2. 使用爬虫获取影片信息
+    let movie_nfo = crawler(&movie_id, progress_bar, templates.clone(), &Arc::new(config.clone())).await?;
+    
+    progress_bar.set_message("验证NFO数据...");
+    
+    // 3. 验证NFO数据
+    let warnings = nfo_generator.validate_nfo(&movie_nfo);
+    if !warnings.is_empty() {
+        log::warn!("NFO数据验证警告: {:?}", warnings);
+    }
+    
+    progress_bar.set_message("生成NFO文件...");
+    
+    // 4. 生成并保存NFO文件
+    let nfo_path = nfo_generator.generate_and_save(&movie_nfo, file_path, config)?;
+    
+    progress_bar.set_message("整理文件...");
+    
+    // 5. 整理文件（移动到输出目录并重命名）
+    if file_organizer.needs_organization(file_path, config) {
+        let new_file_path = file_organizer.organize_file(file_path, &movie_nfo, config)?;
+        log::info!("影片 {} 处理完成，文件移动至: {}，NFO文件: {}", 
+                   movie_id, new_file_path.display(), nfo_path.display());
+    } else {
+        log::info!("影片 {} 处理完成，文件无需移动，NFO文件: {}", 
+                   movie_id, nfo_path.display());
+    }
+    
     Ok(())
 }
 

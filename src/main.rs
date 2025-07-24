@@ -2,7 +2,10 @@ mod args;
 mod config;
 mod crawler;
 mod file;
+mod file_organizer;
 mod nfo;
+mod nfo_generator;
+mod parser;
 
 use std::path::Path;
 
