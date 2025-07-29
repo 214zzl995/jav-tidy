@@ -1,0 +1,54 @@
+entrypoint: "${base_url}/search?q=${crawl_name}&f=all"
+env:
+  base_url: ["https://javdb.com"]
+nodes:
+  main:
+    script: selector(".movie-list")
+    children:
+      match_div:
+        script: selector(".video-title>strong").val().uppercase().equals(${crawl_name}).parent(2)
+        children:
+          search_title: attr("title")
+          detail_url:
+            script: attr("href").insert(0,${base_url})
+            request: true
+            children:
+              # 基本信息
+              title: selector(".video-detail .title .current-title").val()
+              original_title: selector(".video-detail .title .origin-title").val()
+              local_title: selector(".video-detail .title .current-title").val()
+              
+              plot: selector(".video-detail .title .current-title").val()
+              outline: selector(".video-detail .title .current-title").val()
+              tagline: selector(".video-detail .title .current-title").val()
+              
+              premiered: selector(".video-detail .title .current-title").val()
+              release_date: selector(".panel-block>strong").val().delete(" ").equals("日期:").nth().val()
+              
+              # ID 字段
+              imdb_id: selector(".video-detail .title strong").val()
+              javdb_id: selector(".video-detail .title strong").val()
+              douban_id: selector(".video-detail .title strong").val()
+              
+              # 分类信息
+              genres: selector(".panel-block>strong").val().delete(" ").equals("類別:").nth().selector(".value a").val()
+              tags: selector(".panel-block>strong").val().delete(" ").equals("類別:").nth().selector(".value a").val()
+              countries: selector(".video-detail .title .current-title").val()
+              studios: selector(".panel-block>strong").val().delete(" ").equals("片商:").nth().val()
+              
+              # 人员信息
+              directors: selector(".panel-block>strong").val().delete(" ").equals("導演:").nth().selector(".value a").val()
+              writers: selector(".video-detail .title .current-title").val()
+              actors: selector(".panel-block>strong").val().delete(" ").equals("演員:").nth().selector(".value a").val()
+              
+              # 评级
+              mpaa: selector(".video-detail .title .current-title").val()
+              certification: selector(".video-detail .title .current-title").val()
+              
+              # 艺术作品
+              posters: selector(".column-video-cover a img").attr("src")
+              fanarts: selector(".tile-images .tile-item a").attr("href")
+              thumbs: selector(".column-video-cover a img").attr("src")
+              
+              # 其他字段
+              custom_rating: selector(".video-detail .title .current-title").val()

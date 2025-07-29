@@ -1154,6 +1154,7 @@ dependencies = [
  "indicatif",
  "indicatif-log-bridge",
  "log",
+ "mockito",
  "notify",
  "parking_lot",
  "quick-xml",

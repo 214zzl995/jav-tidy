@@ -1,9 +1,9 @@
 // tests/derive_works.rs
 
-use crawler_template::{CrawlerData, CrawlerParseError,Crawler}; 
-use std::collections::HashMap; 
+use crawler_template::{Crawler, CrawlerData, CrawlerParseError};
+use std::collections::HashMap;
 
-#[derive(Crawler, Debug, PartialEq)]
+#[derive(Crawler, Debug, PartialEq, Clone)]
 struct IntegrationTestData {
     required_field: String,
     optional_field: Option<i32>,
@@ -33,13 +33,13 @@ fn test_crawler_derive_in_integration() {
 
     let mut map_empty_opt_vec = HashMap::new();
     map_empty_opt_vec.insert("required_field".to_string(), vec!["empty_test".to_string()]);
-    map_empty_opt_vec.insert("option_vec_field".to_string(), vec![]); 
+    map_empty_opt_vec.insert("option_vec_field".to_string(), vec![]);
 
     let expected_empty_opt_vec = IntegrationTestData {
         required_field: "empty_test".to_string(),
         optional_field: None,
         vec_field: vec![],
-        option_vec_field: None, 
+        option_vec_field: None,
     };
     let parsed_empty_opt_vec =
         IntegrationTestData::parse(&map_empty_opt_vec).expect("解析空的 Option<Vec> 失败");
@@ -83,7 +83,7 @@ fn test_conversion_error() {
     map.insert(
         "optional_field".to_string(),
         vec!["not a number".to_string()],
-    ); 
+    );
     let result = IntegrationTestData::parse(&map);
     assert!(
         matches!(result, Err(CrawlerParseError::ConversionFailed(field)) if field == "optional_field")

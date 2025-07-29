@@ -50,6 +50,9 @@ append    = { ^"append" ~ "(" ~ inner ~ ")" }
 delete    = { ^"delete" ~ "(" ~ inner ~ ")" }
 regex_extract = { ^"regex_extract" ~ "(" ~ inner_static_param ~ ")" }
 regex_replace = { ^"regex_replace" ~ "(" ~ inner_static_param ~ "," ~ inner_static_param ~ ")" }
+trim      = { ^"trim()" }
+split     = { ^"split" ~ "(" ~ inner ~ ")" }
+substring = { ^"substring" ~ "(" ~ digit ~ ("," ~ digit)? ~ ")" }
 
 regex_match  = { ^"regex_match" ~ "(" ~ inner_static_param ~ ")" }
 equals = { ^"equals" ~ "(" ~ inner ~ ")" }
@@ -61,7 +64,7 @@ val  = { ^"val()" }
 
 // Define the Script Type
 selector_rule  = { selector | parent | prev | nth }
-transform_rule = { replace | uppercase | lowercase | insert | prepend | append | delete | regex_extract | regex_replace }
+transform_rule = { replace | uppercase | lowercase | insert | prepend | append | delete | regex_extract | regex_replace | trim | split | substring }
 condition_rule = { equals | regex_match }
 accessor_rule  = { html | attr | val }
 

@@ -12,7 +12,7 @@ pub use crawler_template_macros::Crawler;
 pub use error::{CrawlerErr, CrawlerParseError};
 
 mod error;
-mod script;
+pub mod script;
 mod test;
 
 #[derive(Debug, Clone)]

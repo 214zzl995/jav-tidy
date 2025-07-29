@@ -1,11 +1,11 @@
 use thiserror::Error;
 
-//定义错误
+// Define crawler errors
 #[derive(Error, Debug)]
 pub enum CrawlerErr {
-    #[error("未爬取到数据,节点为：{node}")]
+    #[error("No data found for node: {node}")]
     NotFound { node: &'static str },
-    #[error("IO错误:{msg}")]
+    #[error("IO error: {msg}")]
     IOError { msg: String },
     #[error("Other error: {0}")]
     OtherError(String),
@@ -19,42 +19,41 @@ pub enum CrawlerErr {
     ScriptParseError(#[from] pest::error::Error<crate::script::Rule>),
     #[error("{0}")]
     RegexParseError(#[from] regex::Error),
-    #[error("${{0}} Not yet initialised")]
+    #[error("Variable '${{{0}}}' not yet initialized")]
     DynNotYetInitialised(String),
-    #[error("${{0}} No valid data on the results of the")]
+    #[error("Variable '${{{0}}}' has no valid data")]
     DynNoValidData(String),
-    #[error("${{0}} Variables that do not support multiple results,Currently getting multiple results: {1}")]
+    #[error("Variable '${{{0}}}' does not support multiple results, currently got: {1}")]
     DynMultipleResults(String, String),
-    #[error("parent({0}) Parent node overflow , Current highest parent node: {1}")]
+    #[error("parent({0}) Parent node overflow, current highest parent node: {1}")]
     ParentNodeOverflow(usize, usize),
-    #[error("prev({0}) Prev node overflow , Current highest prev node: {1}")]
+    #[error("prev({0}) Previous sibling node overflow, current highest prev node: {1}")]
     PrevNodeOverflow(usize, usize),
     #[error("Node not found: {0}")]
     NodeNotFound(String),
     #[error("Reqwest error: {0}")]
     ReqwestError(#[from] reqwest::Error),
-    #[error("The node {0} got an incorrect number of :{1}")]
+    #[error("Node '{0}' got incorrect number of values: {1}")]
     InvalidValueCount(String, usize),
-    #[error("The field {0} not found in the tempalte")]
+    #[error("Field '{0}' not found in the template")]
     FieldNotFound(String),
-    #[error("The field {0} parse error: {1}")]
+    #[error("Field '{0}' parse error: {1}")]
     ParseError(String, String),
-    #[error("InvalidTransformRule")]
+    #[error("Invalid transform rule")]
     InvalidTransformRule,
-    #[error("MissingIndex")]
+    #[error("Missing index parameter")]
     MissingIndex,
-    #[error("UnsupportedTransformRule")]
+    #[error("Unsupported transform rule")]
     UnsupportedTransformRule,
-    #[error("UnsupportedSelectorRule")]
+    #[error("Unsupported selector rule")]
     UnsupportedSelectorRule,
-    #[error("The crawler script cannot use character processing functions alone")]
+    #[error("Crawler script cannot use character processing functions in isolation")]
     CharProcessAlone,
-    #[error("Entry point environment variable ${{1}} has multiple parameter values.")]
+    #[error("Entry point environment variable '${{{0}}}' has multiple parameter values")]
     MultipleEntrypointParameterError(String),
 
     #[error("{0}")]
     CrawlerParseError(#[from] CrawlerParseError),
-    
 }
 
 #[derive(Debug, Error)]

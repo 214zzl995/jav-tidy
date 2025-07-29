@@ -30,15 +30,22 @@ pub struct StartParam {
     #[cfg(debug_assertions)]
     #[structopt(short = "l", long = "log", parse(from_os_str), default_value = "./log")]
     pub log_location: PathBuf,
-     
+
     #[cfg(debug_assertions)]
-    #[structopt(short = "t",long = "template", parse(from_os_str), default_value = "./template")]
+    #[structopt(
+        short = "t",
+        long = "template",
+        parse(from_os_str),
+        default_value = "./template"
+    )]
     pub template_location: PathBuf,
 
     #[cfg(not(debug_assertions))]
-    #[structopt(short = "t", long = "template", parse(from_os_str), default_value = "/var/lib/javtidy/template")]
+    #[structopt(
+        short = "t",
+        long = "template",
+        parse(from_os_str),
+        default_value = "/var/lib/javtidy/template"
+    )]
     pub template_location: PathBuf,
-
-    
-
 }

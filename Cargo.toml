@@ -58,3 +58,6 @@ quick-xml = { version = "0.37", features = ["serialize"] }
 serde_yaml = { workspace = true }
 indicatif = "*"
 indicatif-log-bridge = "0.2.3"
+
+[dev-dependencies]
+mockito = "1.7.0"

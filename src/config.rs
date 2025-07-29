@@ -47,15 +47,11 @@ impl AppConfig {
     }
 
     pub fn is_useing_template(&self, template: &str) -> bool {
-        self.template_priority
-            .iter()
-            .any(|t| t == template)
+        self.template_priority.iter().any(|t| t == template)
     }
 
     pub fn get_template_index(&self, template: &str) -> Option<usize> {
-        self.template_priority
-            .iter()
-            .position(|t| t == template)
+        self.template_priority.iter().position(|t| t == template)
     }
 
     /// 获取要忽略的ID模式列表

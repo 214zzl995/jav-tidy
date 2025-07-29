@@ -6,15 +6,13 @@ use std::{
 };
 
 use notify::{Config, Error, Event, EventKind, RecommendedWatcher, Watcher};
-use tokio::{
-    sync::{mpsc, RwLock},
-};
+use tokio::sync::{mpsc, RwLock};
 
 #[cfg(target_os = "windows")]
 use super::is_recycle_bin;
 
 /// 高性能文件监控器
-/// 
+///
 /// 特性：
 /// - 批量处理文件事件，减少任务创建开销
 /// - 智能去重，避免重复处理相同文件
@@ -52,12 +50,12 @@ impl Default for EventHandlerConfig {
 
 impl SourceNotify {
     /// 创建新的文件监控器
-    /// 
+    ///
     /// # 参数
     /// - `sources`: 要监控的目录列表
     /// - `return_tx`: 文件路径发送通道
     /// - `migrate_files_ext`: 允许的文件扩展名列表
-    /// 
+    ///
     /// # 返回
     /// 返回监控器实例或错误
     pub fn new(
@@ -67,7 +65,7 @@ impl SourceNotify {
     ) -> anyhow::Result<Self> {
         // 创建事件通道
         let (event_tx, event_rx) = mpsc::unbounded_channel();
-        
+
         // 创建观察器
         let watcher = RecommendedWatcher::new(
             move |result: Result<Event, Error>| {
@@ -112,7 +110,7 @@ impl SourceNotify {
         sources: &[PathBuf],
     ) -> anyhow::Result<()> {
         let mut watcher = inner.watcher.write().await;
-        
+
         for source in sources {
             if let Err(e) = watcher.watch(source, notify::RecursiveMode::Recursive) {
                 log::error!("无法监控目录 {}: {}", source.display(), e);
@@ -121,7 +119,7 @@ impl SourceNotify {
                 log::info!("开始监控目录: {}", source.display());
             }
         }
-        
+
         Ok(())
     }
 
@@ -133,11 +131,11 @@ impl SourceNotify {
     ) -> anyhow::Result<()> {
         let inner = Arc::clone(&self.inner);
         let config = EventHandlerConfig::default();
-        
+
         tokio::spawn(async move {
             let mut pending_files = Vec::with_capacity(config.batch_size);
             let mut recent_files = std::collections::VecDeque::with_capacity(config.dedup_window);
-            
+
             loop {
                 // 收集一批事件或等待超时
                 let batch_complete = Self::collect_event_batch(
@@ -146,7 +144,8 @@ impl SourceNotify {
                     &mut recent_files,
                     &inner,
                     &config,
-                ).await;
+                )
+                .await;
 
                 // 处理收集到的文件
                 if !pending_files.is_empty() {
@@ -158,7 +157,7 @@ impl SourceNotify {
                     break;
                 }
             }
-            
+
             log::info!("文件监控事件处理器已停止");
         });
 
@@ -174,11 +173,11 @@ impl SourceNotify {
         config: &EventHandlerConfig,
     ) -> bool {
         let start_time = std::time::Instant::now();
-        
+
         while pending_files.len() < config.batch_size {
             let timeout = Duration::from_millis(config.batch_delay_ms);
             let remaining_time = timeout.saturating_sub(start_time.elapsed());
-            
+
             match tokio::time::timeout(remaining_time, event_rx.recv()).await {
                 Ok(Some(Ok(event))) => {
                     Self::process_single_event(event, pending_files, recent_files, inner, config);
@@ -196,7 +195,7 @@ impl SourceNotify {
                 }
             }
         }
-        
+
         true
     }
 
@@ -236,7 +235,7 @@ impl SourceNotify {
 
             // 添加到待处理列表
             pending_files.push(path.clone());
-            
+
             // 维护去重窗口
             recent_files.push_back(path);
             if recent_files.len() > config.dedup_window {
@@ -278,22 +277,19 @@ mod tests {
         let mut allowed = HashSet::new();
         allowed.insert("mp4".to_string());
         allowed.insert("mkv".to_string());
-        
+
         assert!(SourceNotify::is_allowed_file(
-            Path::new("test.mp4"), 
+            Path::new("test.mp4"),
             &allowed
         ));
         assert!(SourceNotify::is_allowed_file(
-            Path::new("test.MP4"), 
+            Path::new("test.MP4"),
             &allowed
         ));
         assert!(!SourceNotify::is_allowed_file(
-            Path::new("test.txt"), 
+            Path::new("test.txt"),
             &allowed
         ));
-        assert!(!SourceNotify::is_allowed_file(
-            Path::new("test"), 
-            &allowed
-        ));
+        assert!(!SourceNotify::is_allowed_file(Path::new("test"), &allowed));
     }
 }

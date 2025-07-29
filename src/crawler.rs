@@ -6,10 +6,10 @@ use std::{
 
 use crate::{
     config::AppConfig,
-    nfo::{MovieNfo, MovieNfoCrawler},
-    parser::FileNameParser,
-    nfo_generator::NfoGenerator,
     file_organizer::FileOrganizer,
+    nfo::{MediaCenterType, MovieNfo, MovieNfoCrawler},
+    nfo_generator::NfoGenerator,
+    parser::FileNameParser,
 };
 use anyhow::Context;
 use crawler_template::Template;
@@ -30,7 +30,7 @@ pub fn initial(
     );
 
     let config = Arc::new(config.clone());
-    
+
     // 启动文件处理任务
     tokio::spawn(process_file_queue(
         file_rx,
@@ -50,7 +50,7 @@ async fn process_file_queue(
     multi_progress: MultiProgress,
 ) {
     log::info!("文件处理队列已启动");
-    
+
     // 创建工具实例
     let parser = match FileNameParser::new() {
         Ok(p) => p,
@@ -59,17 +59,28 @@ async fn process_file_queue(
             return;
         }
     };
-    
-    let nfo_generator = NfoGenerator::new();
+
+    // 创建支持所有媒体中心格式的 NFO 生成器
+    let nfo_generator = NfoGenerator::for_media_center(MediaCenterType::All);
     let file_organizer = FileOrganizer::new();
-    
+
     // 处理文件队列
     while let Some(file_path) = file_rx.recv().await {
         log::info!("接收到新文件: {}", file_path.display());
-        
+
         // 创建进度条
-        let progress_bar = get_progress_bar(&multi_progress, &format!("处理文件: {}", file_path.file_name().unwrap_or_default().to_str().unwrap_or("未知")));
-        
+        let progress_bar = get_progress_bar(
+            &multi_progress,
+            &format!(
+                "处理文件: {}",
+                file_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_str()
+                    .unwrap_or("未知")
+            ),
+        );
+
         // 处理单个文件
         if let Err(e) = process_single_file(
             &file_path,
@@ -79,17 +90,19 @@ async fn process_file_queue(
             &templates,
             &config,
             &progress_bar,
-        ).await {
+        )
+        .await
+        {
             log::error!("处理文件 {} 失败: {}", file_path.display(), e);
             progress_bar.finish_with_message("处理失败");
         } else {
             progress_bar.finish_with_message("处理完成");
         }
-        
+
         // 移除进度条
         multi_progress.remove(&progress_bar);
     }
-    
+
     log::info!("文件处理队列已停止");
 }
 
@@ -104,43 +117,71 @@ async fn process_single_file(
     progress_bar: &ProgressBar,
 ) -> anyhow::Result<()> {
     progress_bar.set_message("解析文件名...");
-    
+
     // 1. 从文件名提取影片ID
     let movie_id = parser
         .extract_movie_id(file_path, config)
         .ok_or_else(|| anyhow::anyhow!("无法从文件名提取影片ID"))?;
-    
+
     log::info!("提取到影片ID: {}", movie_id);
     progress_bar.set_message(format!("搜索影片信息: {}", movie_id));
-    
+
     // 2. 使用爬虫获取影片信息
-    let movie_nfo = crawler(&movie_id, progress_bar, templates.clone(), &Arc::new(config.clone())).await?;
-    
+    let movie_nfo = crawler(
+        &movie_id,
+        progress_bar,
+        templates.clone(),
+        &Arc::new(config.clone()),
+    )
+    .await?;
+
     progress_bar.set_message("验证NFO数据...");
-    
+
     // 3. 验证NFO数据
     let warnings = nfo_generator.validate_nfo(&movie_nfo);
     if !warnings.is_empty() {
         log::warn!("NFO数据验证警告: {:?}", warnings);
     }
-    
+
     progress_bar.set_message("生成NFO文件...");
-    
+
     // 4. 生成并保存NFO文件
-    let nfo_path = nfo_generator.generate_and_save(&movie_nfo, file_path, config)?;
-    
+    let nfo_paths = nfo_generator.generate_and_save(&movie_nfo, file_path, config)?;
+
+    log::info!(
+        "生成了 {} 个NFO文件: {:?}",
+        nfo_paths.len(),
+        nfo_paths
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+    );
+
     progress_bar.set_message("整理文件...");
-    
+
     // 5. 整理文件（移动到输出目录并重命名）
     if file_organizer.needs_organization(file_path, config) {
         let new_file_path = file_organizer.organize_file(file_path, &movie_nfo, config)?;
-        log::info!("影片 {} 处理完成，文件移动至: {}，NFO文件: {}", 
-                   movie_id, new_file_path.display(), nfo_path.display());
+        log::info!(
+            "影片 {} 处理完成，文件移动至: {}，NFO文件: {:?}",
+            movie_id,
+            new_file_path.display(),
+            nfo_paths
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+        );
     } else {
-        log::info!("影片 {} 处理完成，文件无需移动，NFO文件: {}", 
-                   movie_id, nfo_path.display());
+        log::info!(
+            "影片 {} 处理完成，文件无需移动，NFO文件: {:?}",
+            movie_id,
+            nfo_paths
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+        );
     }
-    
+
     Ok(())
 }
 

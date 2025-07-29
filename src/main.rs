@@ -7,6 +7,9 @@ mod nfo;
 mod nfo_generator;
 mod parser;
 
+#[cfg(test)]
+mod test_javdb_template;
+
 use std::path::Path;
 
 use anyhow::Ok;

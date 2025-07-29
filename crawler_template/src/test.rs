@@ -4,7 +4,7 @@ mod tests {
 
     use crate::Template;
 
-    #[derive(Default, Debug)]
+    #[derive(Default, Debug, Clone)]
     struct Movie {
         title: String,
         thumbnail: Option<String>,
@@ -103,7 +103,6 @@ mod tests {
             let mut init_params = HashMap::new();
             init_params.insert("base_url", url.clone());
             init_params.insert("crawl_name", "TEST-MOVIE1".to_string());
-
 
             let result = template.crawler(&init_params).await.unwrap();
 
