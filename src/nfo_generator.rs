@@ -12,6 +12,7 @@ pub struct NfoGenerator {
 
 /// NFO 生成配置
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // 预留给未来的配置功能
 pub struct NfoGeneratorConfig {
     pub media_center_type: MediaCenterType,
     pub generate_multiple_formats: bool,   // 是否生成多种格式
@@ -19,10 +20,10 @@ pub struct NfoGeneratorConfig {
 }
 
 impl NfoGenerator {
-    /// 创建新的 NFO 生成器 (默认兼容所有格式)
+    /// 创建新的 NFO 生成器 (默认通用格式)
     pub fn new() -> Self {
         Self {
-            media_center_type: MediaCenterType::All,
+            media_center_type: MediaCenterType::Universal,
         }
     }
 
@@ -34,13 +35,14 @@ impl NfoGenerator {
     }
 
     /// 从爬虫数据生成并保存 NFO 文件
+    #[allow(dead_code)] // 预留给未来的爬虫数据生成功能
     pub fn generate_from_crawler(
         &self,
         crawler_data: MovieNfoCrawler,
         original_file_path: &Path,
         config: &AppConfig,
     ) -> anyhow::Result<Vec<PathBuf>> {
-        let nfo = MovieNfo::for_media_center(crawler_data, self.media_center_type.clone());
+        let nfo = MovieNfo::for_universal(crawler_data);
         self.generate_and_save(&nfo, original_file_path, config)
     }
 
@@ -53,63 +55,38 @@ impl NfoGenerator {
     ///
     /// # 返回
     /// 成功时返回生成的NFO文件路径列表，失败时返回错误
+    #[allow(dead_code)] // 预留给未来的NFO保存功能
     pub fn generate_and_save(
         &self,
         nfo: &MovieNfo,
         original_file_path: &Path,
         config: &AppConfig,
     ) -> anyhow::Result<Vec<PathBuf>> {
-        let mut generated_files = Vec::new();
-
-        match &self.media_center_type {
-            MediaCenterType::All => {
-                // 生成所有格式的 NFO 文件
-                generated_files.push(self.save_single_format(
-                    nfo,
-                    original_file_path,
-                    config,
-                    MediaCenterType::Kodi,
-                )?);
-                generated_files.push(self.save_single_format(
-                    nfo,
-                    original_file_path,
-                    config,
-                    MediaCenterType::Emby,
-                )?);
-                generated_files.push(self.save_single_format(
-                    nfo,
-                    original_file_path,
-                    config,
-                    MediaCenterType::Jellyfin,
-                )?);
-            }
-            specific_type => {
-                // 生成指定格式的 NFO 文件
-                generated_files.push(self.save_single_format(
-                    nfo,
-                    original_file_path,
-                    config,
-                    specific_type.clone(),
-                )?);
-            }
-        }
+        // 生成通用格式的 NFO 文件
+        let generated_files = vec![self.save_single_format(
+            nfo,
+            original_file_path,
+            config,
+            MediaCenterType::Universal,
+        )?];
 
         Ok(generated_files)
     }
 
     /// 保存单一格式的 NFO 文件
+    #[allow(dead_code)] // 预留给未来的单一格式保存功能
     fn save_single_format(
         &self,
         nfo: &MovieNfo,
         original_file_path: &Path,
         config: &AppConfig,
-        format_type: MediaCenterType,
+        _format_type: MediaCenterType,
     ) -> anyhow::Result<PathBuf> {
         // 生成NFO文件路径
-        let nfo_path = self.generate_nfo_path(original_file_path, nfo, config, &format_type)?;
+        let nfo_path = self.generate_nfo_path(original_file_path, nfo, config, &_format_type)?;
 
         // 生成指定格式的XML内容
-        let xml_content = self.generate_xml_content_for_type(nfo, &format_type)?;
+        let xml_content = self.generate_xml_content_for_type(nfo, &_format_type)?;
 
         // 确保输出目录存在
         if let Some(parent) = nfo_path.parent() {
@@ -122,7 +99,7 @@ impl NfoGenerator {
         log::info!(
             "NFO文件已保存到: {} (格式: {:?})",
             nfo_path.display(),
-            format_type
+            _format_type
         );
 
         Ok(nfo_path)
@@ -131,12 +108,13 @@ impl NfoGenerator {
     /// 生成NFO文件的保存路径
     ///
     /// 根据媒体中心类型生成不同的文件名
+    #[allow(dead_code)] // 预留给未来的NFO路径生成功能
     fn generate_nfo_path(
         &self,
         original_file_path: &Path,
         nfo: &MovieNfo,
         config: &AppConfig,
-        format_type: &MediaCenterType,
+        _format_type: &MediaCenterType,
     ) -> anyhow::Result<PathBuf> {
         let output_dir = config.get_output_dir();
 
@@ -146,48 +124,11 @@ impl NfoGenerator {
             .and_then(|s| s.to_str())
             .ok_or_else(|| anyhow::anyhow!("无法获取文件名"))?;
 
-        // 根据媒体中心类型生成不同的文件名
-        let new_filename = match format_type {
-            MediaCenterType::Kodi => {
-                // Kodi: [文件名].nfo
-                if !nfo.title.is_empty() {
-                    format!("{} [{}].nfo", file_stem, self.sanitize_filename(&nfo.title))
-                } else {
-                    format!("{}.nfo", file_stem)
-                }
-            }
-            MediaCenterType::Emby => {
-                // Emby: [文件名].emby.nfo 或 movie.nfo (如果在单独目录中)
-                if !nfo.title.is_empty() {
-                    format!(
-                        "{} [{}].emby.nfo",
-                        file_stem,
-                        self.sanitize_filename(&nfo.title)
-                    )
-                } else {
-                    format!("{}.emby.nfo", file_stem)
-                }
-            }
-            MediaCenterType::Jellyfin => {
-                // Jellyfin: movie.nfo (推荐) 或 [文件名].jellyfin.nfo
-                if !nfo.title.is_empty() {
-                    format!(
-                        "{} [{}].jellyfin.nfo",
-                        file_stem,
-                        self.sanitize_filename(&nfo.title)
-                    )
-                } else {
-                    format!("{}.jellyfin.nfo", file_stem)
-                }
-            }
-            MediaCenterType::All => {
-                // 兼容格式
-                if !nfo.title.is_empty() {
-                    format!("{} [{}].nfo", file_stem, self.sanitize_filename(&nfo.title))
-                } else {
-                    format!("{}.nfo", file_stem)
-                }
-            }
+        // 生成通用格式的文件名
+        let new_filename = if !nfo.title.is_empty() {
+            format!("{} [{}].nfo", file_stem, self.sanitize_filename(&nfo.title))
+        } else {
+            format!("{}.nfo", file_stem)
         };
 
         let nfo_path = output_dir.join(new_filename);
@@ -199,14 +140,9 @@ impl NfoGenerator {
     fn generate_xml_content_for_type(
         &self,
         nfo: &MovieNfo,
-        format_type: &MediaCenterType,
+        _format_type: &MediaCenterType,
     ) -> anyhow::Result<String> {
-        let xml_content = match format_type {
-            MediaCenterType::Kodi => nfo.format_for_kodi(),
-            MediaCenterType::Emby => nfo.format_for_emby(),
-            MediaCenterType::Jellyfin => nfo.format_for_jellyfin(),
-            MediaCenterType::All => nfo.format_for_kodi(), // 默认使用 Kodi 格式
-        };
+        let xml_content = nfo.format_to_xml();
 
         if xml_content.is_empty() {
             return Err(anyhow::anyhow!("序列化NFO数据失败: 生成的XML内容为空"));
@@ -216,23 +152,8 @@ impl NfoGenerator {
         let mut full_xml =
             String::from("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n");
 
-        // 添加格式特定的注释
-        match format_type {
-            MediaCenterType::Kodi => {
-                full_xml.push_str("<!-- Generated for Kodi Media Center -->\n");
-            }
-            MediaCenterType::Emby => {
-                full_xml.push_str("<!-- Generated for Emby Media Server -->\n");
-            }
-            MediaCenterType::Jellyfin => {
-                full_xml.push_str("<!-- Generated for Jellyfin Media Server -->\n");
-            }
-            MediaCenterType::All => {
-                full_xml.push_str(
-                    "<!-- Universal NFO format compatible with multiple media centers -->\n",
-                );
-            }
-        }
+        // 添加通用格式注释
+        full_xml.push_str("<!-- Universal NFO format compatible with Kodi/Emby/Jellyfin -->\n");
 
         full_xml.push_str(&xml_content);
 
@@ -245,6 +166,7 @@ impl NfoGenerator {
     }
 
     /// 清理文件名中的非法字符
+    #[allow(dead_code)] // 预留给未来的文件名清理功能
     fn sanitize_filename(&self, filename: &str) -> String {
         // 移除或替换文件名中的非法字符
         let illegal_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
@@ -281,7 +203,7 @@ impl NfoGenerator {
     pub fn validate_nfo_for_type(
         &self,
         nfo: &MovieNfo,
-        format_type: &MediaCenterType,
+        _format_type: &MediaCenterType,
     ) -> Vec<String> {
         let mut warnings = Vec::new();
 
@@ -309,32 +231,13 @@ impl NfoGenerator {
             warnings.push("类型标签为空".to_string());
         }
 
-        // 添加格式特定的验证
-        match format_type {
-            MediaCenterType::Kodi => {
-                if nfo.unique_ids.is_empty() && nfo.imdb_id.is_empty() {
-                    warnings.push("Kodi推荐设置唯一ID (uniqueid)".to_string());
-                }
-            }
-            MediaCenterType::Emby => {
-                if nfo.provider_ids.is_none() && nfo.imdb_id.is_empty() {
-                    warnings.push("Emby推荐设置提供商ID (providerids)".to_string());
-                }
-                if nfo.community_rating.is_none() {
-                    warnings.push("Emby推荐设置社区评分".to_string());
-                }
-            }
-            MediaCenterType::Jellyfin => {
-                if nfo.provider_ids.is_none() && nfo.imdb_id.is_empty() {
-                    warnings.push("Jellyfin推荐设置提供商ID (providerids)".to_string());
-                }
-                if !nfo.lock_data {
-                    warnings.push("Jellyfin推荐锁定数据以防止被覆盖".to_string());
-                }
-            }
-            MediaCenterType::All => {
-                // 通用验证已在上面完成
-            }
+        // 通用验证
+        if nfo.imdb_id.is_empty() {
+            warnings.push("推荐设置 IMDB ID".to_string());
+        }
+
+        if nfo.rating.is_none() && nfo.ratings.is_none() {
+            warnings.push("推荐设置评分信息".to_string());
         }
 
         warnings
@@ -348,36 +251,43 @@ impl Default for NfoGenerator {
 }
 
 /// NFO 生成器构建器
+#[allow(dead_code)] // 预留给未来的构建器功能
 pub struct NfoGeneratorBuilder {
     media_center_type: MediaCenterType,
+    #[allow(dead_code)] // 预留字段
     generate_multiple_formats: bool,
+    #[allow(dead_code)] // 预留字段
     custom_xml_header: Option<String>,
 }
 
 impl NfoGeneratorBuilder {
     pub fn new() -> Self {
         Self {
-            media_center_type: MediaCenterType::All,
+            media_center_type: MediaCenterType::Universal,
             generate_multiple_formats: false,
             custom_xml_header: None,
         }
     }
 
+    #[allow(dead_code)] // 预留给未来的媒体中心配置功能
     pub fn for_media_center(mut self, media_center: MediaCenterType) -> Self {
         self.media_center_type = media_center;
         self
     }
 
+    #[allow(dead_code)] // 预留给未来的多格式生成功能
     pub fn generate_multiple_formats(mut self, enabled: bool) -> Self {
         self.generate_multiple_formats = enabled;
         self
     }
 
+    #[allow(dead_code)] // 预留给未来的自定义XML头部功能
     pub fn with_custom_xml_header(mut self, header: String) -> Self {
         self.custom_xml_header = Some(header);
         self
     }
 
+    #[allow(dead_code)] // 预留给未来的构建功能
     pub fn build(self) -> NfoGenerator {
         NfoGenerator {
             media_center_type: self.media_center_type,
@@ -452,29 +362,15 @@ maximum_fetch_count = 3
     }
 
     #[test]
-    fn test_generate_xml_for_different_media_centers() {
+    fn test_generate_xml_for_universal_format() {
         let nfo = create_test_nfo();
 
-        // 测试 Kodi 格式
-        let kodi_generator = NfoGenerator::for_media_center(MediaCenterType::Kodi);
-        let kodi_xml = kodi_generator
-            .generate_xml_content_for_type(&nfo, &MediaCenterType::Kodi)
+        // 测试通用格式
+        let universal_generator = NfoGenerator::for_media_center(MediaCenterType::Universal);
+        let universal_xml = universal_generator
+            .generate_xml_content_for_type(&nfo, &MediaCenterType::Universal)
             .unwrap();
-        assert!(kodi_xml.contains("Generated for Kodi"));
-
-        // 测试 Emby 格式
-        let emby_generator = NfoGenerator::for_media_center(MediaCenterType::Emby);
-        let emby_xml = emby_generator
-            .generate_xml_content_for_type(&nfo, &MediaCenterType::Emby)
-            .unwrap();
-        assert!(emby_xml.contains("Generated for Emby"));
-
-        // 测试 Jellyfin 格式
-        let jellyfin_generator = NfoGenerator::for_media_center(MediaCenterType::Jellyfin);
-        let jellyfin_xml = jellyfin_generator
-            .generate_xml_content_for_type(&nfo, &MediaCenterType::Jellyfin)
-            .unwrap();
-        assert!(jellyfin_xml.contains("Generated for Jellyfin"));
+        assert!(universal_xml.contains("Universal NFO format"));
     }
 
     #[test]
@@ -500,7 +396,7 @@ maximum_fetch_count = 3
 
         // 测试完整的NFO
         let complete_nfo = create_test_nfo();
-        let warnings = generator.validate_nfo(&complete_nfo);
+        let _warnings = generator.validate_nfo(&complete_nfo);
         // 由于缺少ID信息，可能会有警告
 
         // 测试不完整的NFO
@@ -512,25 +408,21 @@ maximum_fetch_count = 3
     #[test]
     fn test_nfo_generator_builder() {
         let generator = NfoGeneratorBuilder::new()
-            .for_media_center(MediaCenterType::Kodi)
+            .for_media_center(MediaCenterType::Universal)
             .generate_multiple_formats(true)
             .build();
 
         // 验证构建器正确设置了媒体中心类型
-        assert_eq!(generator.media_center_type, MediaCenterType::Kodi);
+        assert_eq!(generator.media_center_type, MediaCenterType::Universal);
     }
 
     #[test]
-    fn test_media_center_specific_validation() {
+    fn test_universal_format_validation() {
         let generator = NfoGenerator::new();
         let nfo = create_test_nfo();
 
-        // 测试 Kodi 特定验证
-        let kodi_warnings = generator.validate_nfo_for_type(&nfo, &MediaCenterType::Kodi);
-        assert!(kodi_warnings.iter().any(|w| w.contains("uniqueid")));
-
-        // 测试 Emby 特定验证
-        let emby_warnings = generator.validate_nfo_for_type(&nfo, &MediaCenterType::Emby);
-        assert!(emby_warnings.iter().any(|w| w.contains("providerids")));
+        // 测试通用格式验证
+        let universal_warnings = generator.validate_nfo_for_type(&nfo, &MediaCenterType::Universal);
+        assert!(universal_warnings.iter().any(|w| w.contains("IMDB ID")));
     }
 }
