@@ -9,6 +9,88 @@ migrate_files = ["mp4", "mkv", "avi", "wmv", "flv", "mov"]
 # 是否同时处理字幕文件
 migrate_subtitles = true
 
+# 支持的字幕文件扩展名（用于Emby/Jellyfin/Kodi等媒体中心自动识别）
+subtitle_extensions = [
+    "srt",    # SubRip (最常用)
+    "ass",    # Advanced SubStation Alpha
+    "ssa",    # SubStation Alpha  
+    "vtt",    # WebVTT
+    "sub",    # MicroDVD
+    "idx",    # DVD 字幕索引
+    "sup"     # BD 字幕
+]
+
+# 字幕文件语言标识（ISO 639-1 + ISO 3166-1 格式）
+# 常用语言代码：
+#   zh-CN  - 中文简体
+#   zh-TW  - 中文繁体
+#   en-US  - 英语（美国）
+#   ja-JP  - 日语
+#   ko-KR  - 韩语
+subtitle_language = "zh-CN"
+
+# ===== 图片下载配置 =====
+[image]
+# 是否下载图片（海报、背景图等）
+download_images = true
+# 是否下载预览图集（可能较大，谨慎启用）
+download_preview_images = false
+# 媒体中心类型，影响图片命名规则
+# 可选值: "universal", "emby", "kodi", "plex"
+media_center_type = "universal"
+# 图片下载超时时间（秒）
+timeout = 30
+
+# ===== 翻译服务配置 =====
+[translation]
+# 是否启用翻译功能
+enabled = false
+# 翻译服务提供商 (openai/ollama/自定义URL)
+provider = "openai"
+# 翻译服务 API Key（留空适合 Ollama 等本地服务）
+# api_key = "sk-your-api-key-here"
+# 翻译模型名称
+model = "gpt-3.5-turbo"
+# 目标语言
+target_language = "中文"
+# 源语言（可选，留空为自动检测）
+# source_language = "日语"
+# 翻译最大令牌数
+max_tokens = 1000
+# 翻译温度参数 (0.0-2.0)
+temperature = 0.3
+# 翻译请求超时时间（秒）
+timeout = 30
+# 翻译重试次数
+retry_count = 3
+
+# ===== 标签处理配置 =====
+[tag]
+# 是否翻译标签
+translate = true
+# 是否启用AI辅助标签合并（基础合并始终开启）
+ai_merge = false
+# AI标签合并的相似度阈值 (0.0-1.0，越高越严格)
+ai_merge_threshold = 0.8
+
+# ===== 字幕文件配置 =====
+[subtitle]
+# 是否同时处理字幕文件
+migrate = true
+# 支持的字幕文件扩展名
+extensions = ["srt", "ass", "ssa", "vtt", "sub", "idx", "sup"]
+# 字幕文件语言标识（ISO 639-1 + ISO 3166-1格式）
+language = "zh-CN"
+
+# ===== 文件命名配置 =====
+[naming]
+# 文件命名模板，支持变量如 $title$, $actor$, $year$, $series$ 等
+template = "$series$/$title$ ($year$)"
+# 多演员处理策略 (symlink/hardlink/first_only/merge)
+multi_actor_strategy = "symlink"
+# 是否将文件名转为小写 
+capital = false
+
 # 要从文件名中忽略的模式（用于清理文件名）
 ignored_id_pattern = [
     "-HD", "-FHD", "-4K", "-1080p", "-720p", "-480p",
@@ -46,9 +128,370 @@ template_priority = [
     # "dmm.yaml"
 ]
 
+# ===== 文件命名模板配置 =====
+
+# 文件命名模板，支持变量如 $title$, $actor$, $year$, $series$ 等
+# 默认: "$series$/$title$ ($year$)" - 系列名/影片标题 (年份)
+# 可用变量:
+#   $title$         - 影片标题
+#   $original_title$ - 原始标题
+#   $year$          - 年份
+#   $series$        - 系列名
+#   $actor$         - 演员名（第一个或根据策略处理）
+#   $director$      - 导演名
+#   $studio$        - 制片厂
+#   $genre$         - 类型（第一个）
+#   $id$            - 影片ID
+file_naming_template = "$series$/$title$ ($year$)"
+
+# 多演员处理策略
+# 可选值:
+#   "symlink"   - 符号链接（推荐）：在第一个演员目录创建实际文件，其他演员目录创建符号链接
+#   "hardlink"  - 硬链接：创建硬链接，失败时回退到符号链接
+#   "first_only"- 仅第一个：只使用第一个演员的名字
+#   "merge"     - 合并：将所有演员名称合并，如 "演员A & 演员B"
+multi_actor_strategy = "symlink"
+
+# ===== 文件命名模板示例 =====
+
+# 以下是一些常用的模板示例，根据需要选择并修改 file_naming_template：
+
+# 1. 默认模板（系列分类）:
+# file_naming_template = "$series$/$title$ ($year$)"
+# 生成: 输出目录/家庭按摩系列/人妻自宅エステサロン (2024).mp4
+
+# 2. 演员分类模板:
+# file_naming_template = "$actor$/$title$ ($year$)"
+# 生成: 输出目录/演员A/人妻自宅エステサロン (2024).mp4
+
+# 3. 制片厂分类模板:
+# file_naming_template = "$studio$/$series$/$title$ ($year$)"
+# 生成: 输出目录/IDEA POCKET/家庭按摩系列/人妻自宅エステサロン (2024).mp4
+
+# 4. 年份分类模板:
+# file_naming_template = "$year$/$genre$/$title$"
+# 生成: 输出目录/2024/Drama/人妻自宅エステサロン.mp4
+
+# 5. 混合分类模板:
+# file_naming_template = "$studio$/$year$/$actor$-$title$ ($year$)"
+# 生成: 输出目录/IDEA POCKET/2024/演员A-人妻自宅エステサロン (2024).mp4
+
 # ===== 高级配置 =====
 
 # 文件名清理规则示例：
 # 原文件: "IPX-001_1080p_chinese_subtitled.mp4"
 # 清理后: "IPX001" (用于搜索)
-# 最终文件名: "IPX-001 [标题].mp4" 
+# 最终文件名: 根据模板生成，如 "家庭按摩系列/IPX-001 人妻自宅エステサロン (2024).mp4"
+
+# ===== 多演员处理示例 =====
+
+# 当影片有多个演员时（如：演员A, 演员B），不同策略的效果：
+
+# 使用 multi_actor_strategy = "symlink" 和 file_naming_template = "$actor$/$title$ ($year$)":
+# 输出目录/
+# ├── 演员A/
+# │   ├── 影片标题 (2024).mp4        # 实际文件
+# │   ├── 影片标题 (2024).nfo        # 实际文件
+# │   ├── 影片标题 (2024).srt        # 字幕文件（如果存在）
+# │   └── 影片标题 (2024).ass        # 多语言字幕（如果存在）
+# └── 演员B/
+#     ├── 影片标题 (2024).mp4        # 符号链接 -> ../演员A/影片标题 (2024).mp4
+#     ├── 影片标题 (2024).nfo        # 符号链接 -> ../演员A/影片标题 (2024).nfo
+#     ├── 影片标题 (2024).srt        # 符号链接 -> ../演员A/影片标题 (2024).srt
+#     └── 影片标题 (2024).ass        # 符号链接 -> ../演员A/影片标题 (2024).ass
+
+# 使用 multi_actor_strategy = "merge":
+# 输出目录/
+# └── 演员A & 演员B/
+#     ├── 影片标题 (2024).mp4
+#     ├── 影片标题 (2024).nfo
+#     ├── 影片标题 (2024).srt        # 中文字幕
+#     ├── 影片标题 (2024).chs.srt    # 中文简体字幕（如果原文件包含语言标识）
+#     └── 影片标题 (2024).vtt        # WebVTT格式字幕
+
+# 使用 multi_actor_strategy = "first_only":
+# 输出目录/
+# └── 演员A/
+#     ├── 影片标题 (2024).mp4
+#     ├── 影片标题 (2024).nfo
+#     ├── 影片标题 (2024).srt        # 主字幕文件
+#     └── 影片标题 (2024).ass        # ASS格式字幕（支持特效）
+
+# ===== 字幕文件迁移说明 =====
+
+# 字幕文件迁移功能会根据爬取后的影片ID（如IPX-001）自动查找并迁移匹配的字幕文件
+# 
+# 匹配逻辑：
+# 1. 从爬取的NFO数据中获取影片ID（如"IPX-001"）
+# 2. 标准化影片ID：移除特殊字符，转为小写（"ipx001"）
+# 3. 扫描输入目录中的所有字幕文件
+# 4. 从字幕文件名中提取标识符并标准化
+# 5. 匹配标准化后的标识符，迁移匹配的字幕文件
+#
+# 示例：
+# 影片ID: "IPX-001"
+# subtitle_language = "zh-CN"
+# 匹配的字幕文件：
+#   - IPX-001.srt          -> Test Movie (2024).zh-CN.srt
+#   - IPX-001.chs.srt      -> Test Movie (2024).zh-CN.srt  
+#   - ipx001.ass           -> Test Movie (2024).zh-CN.ass
+#   - IPX_001.vtt          -> Test Movie (2024).zh-CN.vtt
+# 不匹配的文件：
+#   - PRED-123.srt         (不同ID)
+#   - random.txt           (非字幕文件)
+#
+# ===== 完整输出目录结构示例 =====
+#
+# 使用默认配置的完整输出结构：
+# file_naming_template = "$series$/$title$ ($year$)"
+# migrate_subtitles = true
+#
+# 输出目录/
+# ├── 家庭按摩系列/
+# │   └── IPX-001 人妻自宅エステサロン (2024)/
+# │       ├── IPX-001 人妻自宅エステサロン (2024).mp4
+# │       ├── IPX-001 人妻自宅エステサロン (2024).nfo       # 影片元数据
+# │       ├── IPX-001 人妻自宅エステサロン (2024).zh-CN.srt # 中文字幕
+# │       ├── IPX-001 人妻自宅エステサロン (2024).zh-CN.ass # ASS特效字幕
+# │       └── IPX-001 人妻自宅エステサロン (2024).zh-CN.vtt # WebVTT字幕
+# └── 制服系列/
+#     └── PRED-123 女教师的秘密 (2024)/
+#         ├── PRED-123 女教师的秘密 (2024).mkv
+#         ├── PRED-123 女教师的秘密 (2024).nfo
+#         ├── PRED-123 女教师的秘密 (2024).zh-CN.srt    # 中文简体字幕
+#         ├── PRED-123 女教师的秘密 (2024).zh-CN.ass    # ASS格式字幕
+#         ├── PRED-123 女教师的秘密 (2024).zh-CN.vtt    # WebVTT字幕
+#         └── PRED-123 女教师的秘密 (2024).zh-CN.sup    # PGS蓝光字幕
+#
+# 字幕文件命名规则：
+# - 统一格式: [影片名].[语言代码].[扩展名]
+# - 语言标识: 使用配置中的 subtitle_language，如 zh-CN, en-US, ja-JP
+# - 所有匹配的字幕都会使用相同的语言标识，确保一致性
+# - 媒体中心兼容: Emby/Jellyfin/Kodi 会根据语言代码自动识别和分类字幕
+#
+# ===== 不同模板策略的字幕处理示例 =====
+#
+# 使用演员分类模板时的字幕输出：
+# file_naming_template = "$actor$/$title$ ($year$)"
+#
+# 输出目录/
+# ├── 演员A/
+# │   └── IPX-001 人妻自宅エステサロン (2024)/
+# │       ├── IPX-001 人妻自宅エステサロン (2024).mp4
+# │       ├── IPX-001 人妻自宅エステサロン (2024).nfo
+# │       ├── IPX-001 人妻自宅エステサロン (2024).zh-CN.srt # 自动迁移的字幕
+# │       └── IPX-001 人妻自宅エステサロン (2024).zh-CN.ass # 多格式字幕支持
+# └── 演员B/
+#     └── PRED-456 办公室恋情 (2024)/
+#         ├── PRED-456 办公室恋情 (2024).mkv
+#         ├── PRED-456 办公室恋情 (2024).nfo
+#         ├── PRED-456 办公室恋情 (2024).zh-CN.srt      # 中文字幕
+#         ├── PRED-456 办公室恋情 (2024).zh-CN.ass      # ASS格式字幕
+#         └── PRED-456 办公室恋情 (2024).zh-CN.vtt      # WebVTT字幕
+#
+# 注意：所有字幕文件都会使用配置中指定的语言标识（subtitle_language），
+#       原文件名中的语言标识会被统一替换，确保命名一致性和媒体中心兼容性。
+
+# ===== 媒体中心图片下载功能说明 =====
+
+# 图片下载功能会自动为每部影片下载适合媒体中心的图片文件：
+
+# 1. 通用格式 (media_center_type = "universal"):
+#    - poster.jpg        # 主海报
+#    - backdrop.jpg      # 背景图
+#    - fanart.jpg        # 背景图（Kodi兼容）
+#    - thumb.jpg         # 缩略图
+#    - landscape.jpg     # 横向缩略图
+#    - preview_01.jpg    # 预览图1（如果启用）
+#    - preview_02.jpg    # 预览图2（如果启用）
+
+# 2. Emby/Jellyfin 格式 (media_center_type = "emby"):
+#    - [影片ID].jpg      # 主海报（自动识别）
+#    - poster.jpg        # 通用海报
+#    - backdrop.jpg      # 背景图
+#    - fanart.jpg        # 背景图（兼容）
+
+# 3. Kodi 格式 (media_center_type = "kodi"):
+#    - [影片ID]-poster.jpg   # Kodi海报命名
+#    - [影片ID]-fanart.jpg   # Kodi背景图命名
+#    - [影片ID]-thumb.jpg    # Kodi缩略图命名
+#    - poster.jpg            # 通用海报
+#    - fanart.jpg            # 通用背景图
+
+# 4. Plex 格式 (media_center_type = "plex"):
+#    - [影片ID].jpg          # Plex主海报
+#    - [影片ID].fanart.jpg   # Plex背景图
+#    - poster.jpg            # 文件夹海报
+#    - art.jpg               # 文件夹背景图
+
+# 示例输出结构（开启图片下载）：
+# 输出目录/
+# ├── 家庭按摩系列/
+# │   └── IPX-001 人妻自宅エステサロン (2024)/
+# │       ├── IPX-001 人妻自宅エステサロン (2024).mp4
+# │       ├── IPX-001 人妻自宅エステサロン (2024).nfo
+# │       ├── poster.jpg              # 主海报
+# │       ├── backdrop.jpg            # 背景图
+# │       ├── fanart.jpg              # 背景图（Kodi兼容）
+# │       ├── thumb.jpg               # 缩略图
+# │       ├── landscape.jpg           # 横向缩略图
+# │       ├── preview_01.jpg          # 预览图1（可选）
+# │       ├── preview_02.jpg          # 预览图2（可选）
+# │       └── IPX-001 人妻自宅エステサロン (2024).zh-CN.srt
+
+# 图片下载说明：
+# - 程序会根据爬取的数据自动下载对应的图片
+# - 图片文件会保存在影片文件的同一目录
+# - 支持多种格式：JPEG, PNG, GIF, BMP
+# - 自动验证图片完整性，清理损坏的文件
+# - 如果图片已存在且有效，会跳过重复下载
+# - 下载失败不会影响其他处理流程，只会记录警告
+
+# ===== 配置结构说明 =====
+
+# 新版本配置采用分组结构，提高可读性和维护性：
+# - [image]: 图片下载相关配置
+# - [translation]: 翻译服务相关配置  
+# - [tag]: 标签处理相关配置
+# - [subtitle]: 字幕文件相关配置
+# - [naming]: 文件命名相关配置
+
+# 向后兼容：仍支持旧版本的扁平配置格式
+
+# ===== 翻译功能详细说明 =====
+
+# 翻译功能可以将爬取的日语内容翻译为中文，使内容更易读懂：
+
+# 1. 翻译内容包括：
+#    - 影片标题
+#    - 原始标题（如果与标题不同）
+#    - 剧情简介
+#    - 标语
+#    - 系列名称
+#    - 系列描述
+#    - 标签/类型（可选）
+
+# 2. 支持的翻译服务：
+#    a) OpenAI (推荐，质量最高)
+#       - 需要 API Key
+#       - 支持 GPT-3.5, GPT-4 等模型
+#       - 需要网络连接和费用
+
+#    b) Ollama (本地部署，免费)
+#       - 无需 API Key
+#       - 支持多种开源模型
+#       - 需要本地安装 Ollama
+#       - 示例配置：
+#         translation_provider = "ollama"
+#         translation_model = "qwen2.5:7b"
+#         # translation_api_key 留空
+
+#    c) 自定义 API 服务
+#       - 兼容 OpenAI API 格式的服务
+#       - 如 Azure OpenAI, 本地部署的 API 等
+#       - 示例配置：
+#         translation_provider = "https://your-api.example.com/v1"
+
+# 3. 智能标签合并功能：
+#    分为两个层次的合并：
+#    
+#    a) 基础合并（始终开启）：
+#       - 自动合并完全相同的标签
+#       - 合并已知的同义词，例如：
+#         · "女優", "女优", "AV女優" -> "演员"
+#         · "巨乳", "美乳", "爆乳" -> "大胸"
+#         · "中出", "中出し", "creampie" -> "内射"
+#         · "制服", "セーラー服" -> "校服"
+#       - 合并相同演员的不同写法
+#    
+#    b) AI辅助合并（可选开启）：
+#       - 使用AI识别相似但未预定义的标签
+#       - 可设置相似度阈值（0.0-1.0）
+#       - 智能保留最具代表性的标签名称
+#       - 例如：AI可能将"美少女"和"美女"合并为"美女"
+
+# 4. 翻译示例效果：
+#    原始数据：
+#    - 标题: "人妻自宅エステサロン"
+#    - 简介: "美人妻が自宅でエステサロンを営んでいる..."
+#    - 标签: ["人妻", "巨乳", "中出"]
+#    
+#    翻译后：
+#    - 标题: "人妻自宅美容沙龙"
+#    - 简介: "美丽的人妻在自宅经营美容沙龙..."
+#    - 标签: ["人妻", "大胸", "内射"]
+
+# 5. 使用建议：
+#    - 首次使用建议先用少量文件测试
+#    - OpenAI 服务需要考虑 API 调用费用
+#    - Ollama 本地服务免费但需要较好的硬件配置
+#    - 翻译失败不会影响文件处理，会继续使用原始数据
+#    - 可以只启用标签合并而不启用翻译
+
+# 6. 配置示例：
+#    
+#    a) 启用翻译和AI标签合并：
+#      [translation]
+#      enabled = true
+#      provider = "openai"
+#      api_key = "sk-your-key"
+#      
+#      [tag]
+#      translate = true
+#      ai_merge = true
+#      ai_merge_threshold = 0.8
+#    
+#    b) 仅使用本地Ollama翻译：
+#      [translation]
+#      enabled = true
+#      provider = "ollama" 
+#      model = "qwen2.5:7b"
+#      # 无需api_key
+#      
+#      [tag]
+#      translate = true
+#      ai_merge = false  # 不使用AI合并以节省资源
+#    
+#    c) 仅启用基础功能：
+#      [translation]
+#      enabled = false
+#      
+#      [tag]
+#      translate = false
+#      ai_merge = false
+#      # 基础标签合并和演员合并始终开启
+
+# ===== 环境变量支持 =====
+
+# 也可以通过环境变量覆盖配置：
+
+# 基础配置
+# export JAVTIDY_INPUT_DIR='./my_input'
+# export JAVTIDY_OUTPUT_DIR='./my_output'
+
+# 图片配置（支持新格式和旧格式）
+# export JAVTIDY_IMAGE__DOWNLOAD_IMAGES='true'  # 新格式
+# export JAVTIDY_DOWNLOAD_IMAGES='true'         # 旧格式（兼容）
+# export JAVTIDY_IMAGE__MEDIA_CENTER_TYPE='universal'
+# export JAVTIDY_IMAGE__TIMEOUT='30'
+
+# 翻译配置（支持新格式和旧格式）
+# export JAVTIDY_TRANSLATION__ENABLED='false'   # 新格式
+# export JAVTIDY_ENABLE_TRANSLATION='false'     # 旧格式（兼容）
+# export JAVTIDY_TRANSLATION__PROVIDER='openai'
+# export JAVTIDY_TRANSLATION__API_KEY='sk-your-key'
+# export JAVTIDY_TRANSLATION__MODEL='gpt-3.5-turbo'
+
+# 标签配置
+# export JAVTIDY_TAG__TRANSLATE='true'
+# export JAVTIDY_TAG__AI_MERGE='false'
+# export JAVTIDY_TAG__AI_MERGE_THRESHOLD='0.8'
+
+# 字幕配置
+# export JAVTIDY_SUBTITLE__MIGRATE='true'
+# export JAVTIDY_SUBTITLE__LANGUAGE='zh-CN'
+
+# 命名配置
+# export JAVTIDY_NAMING__TEMPLATE='$actor$/$title$ ($year$)'
+# export JAVTIDY_NAMING__MULTI_ACTOR_STRATEGY='symlink'
+# export JAVTIDY_NAMING__CAPITAL='false'
