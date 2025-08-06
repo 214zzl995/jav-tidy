@@ -37,8 +37,18 @@ name = "jav-tidy-rs"
 version = "0.1.0"
 edition = "2021"
 
+# 配置库和二进制目标
+[[bin]]
+name = "jav-tidy-rs"
+path = "src/main.rs"
+
+[lib]
+name = "jav_tidy_rs"
+path = "src/lib.rs"
+
 [dependencies]
 anyhow = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
 regex = { workspace = true }
@@ -58,6 +68,7 @@ quick-xml = { version = "0.37", features = ["serialize"] }
 serde_yaml = { workspace = true }
 indicatif = "*"
 indicatif-log-bridge = "0.2.3"
+reqwest = { version = "0.12", features = ["json"] }
 
 [dev-dependencies]
 mockito = "1.7.0"
