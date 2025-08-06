@@ -60,38 +60,65 @@ impl FileNameParser {
     /// 清理文件名，移除配置中指定的模式
     fn clean_filename(&self, filename: &str, config: &AppConfig) -> String {
         let mut cleaned = filename.to_string();
+        log::debug!("开始清理文件名: '{}'", filename);
 
         // 按配置移除不需要的模式，用空格替换以避免单词粘连
-        for pattern in config.get_ignored_id_pattern() {
+        let ignored_patterns = config.get_ignored_id_pattern();
+        log::debug!("配置的忽略模式: {:?}", ignored_patterns);
+        
+        for pattern in ignored_patterns {
+            let before = cleaned.clone();
             cleaned = cleaned.replace(pattern, " ");
+            if before != cleaned {
+                log::debug!("移除模式 '{}': '{}' -> '{}'", pattern, before, cleaned);
+            }
         }
 
         // 移除多余的空格和分隔符
+        let before_whitespace = cleaned.clone();
         cleaned = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
+        if before_whitespace != cleaned {
+            log::debug!("清理空格: '{}' -> '{}'", before_whitespace, cleaned);
+        }
 
         // 根据配置决定是否转换大小写
         if config.is_capital() {
+            log::debug!("配置为小写模式");
             cleaned = cleaned.to_lowercase();
         } else {
+            log::debug!("配置为大写模式");
             cleaned = cleaned.to_uppercase();
         }
 
+        log::debug!("文件名清理完成: '{}' -> '{}'", filename, cleaned);
         cleaned
     }
 
     /// 从清理后的文件名中提取影片ID
     fn extract_id_from_cleaned_name(&self, cleaned_name: &str) -> Option<String> {
+        log::debug!("尝试从清理后的文件名提取影片ID: '{}'", cleaned_name);
+        
         // 依次尝试所有正则表达式，按优先级顺序
-        for regex in &self.movie_id_regexes {
+        for (i, regex) in self.movie_id_regexes.iter().enumerate() {
+            log::debug!("尝试正则表达式 #{}: {}", i + 1, regex.as_str());
+            
             if let Some(captures) = regex.captures(cleaned_name) {
                 if let Some(movie_id) = captures.get(1) {
                     let movie_id_str = movie_id.as_str();
+                    log::debug!("正则表达式匹配成功，原始ID: '{}'", movie_id_str);
+                    
                     // 标准化格式：确保字母部分大写，保持分隔符
                     let normalized_id = self.normalize_movie_id(movie_id_str);
+                    log::debug!("标准化后的影片ID: '{}'", normalized_id);
+                    
                     return Some(normalized_id);
                 }
+            } else {
+                log::debug!("正则表达式 #{} 不匹配", i + 1);
             }
         }
+        
+        log::warn!("所有正则表达式都无法匹配文件名: '{}'", cleaned_name);
         None
     }
 
