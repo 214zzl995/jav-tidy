@@ -7,14 +7,18 @@ nodes:
     children:
       match_div:
         script: selector(".video-title>strong").val().uppercase().equals(${crawl_name}).parent(2)
+        required: true  # 关键节点，必须匹配才能继续
         children:
           search_title: attr("title")
           detail_url:
             script: attr("href").insert(0,${base_url})
             request: true
+            required: true  # 详情页URL必须存在
             children:
               # 基本信息
-              title: selector(".video-detail .title .current-title").val()
+              title:
+                script: selector(".video-detail .title .current-title").val()
+                required: true  # 标题是必需的
               original_title: selector(".video-detail .title .origin-title").val()
               local_title: selector(".video-detail .title .current-title").val()
               
@@ -22,13 +26,14 @@ nodes:
               outline: selector(".video-detail .title .current-title").val()
               tagline: selector(".video-detail .title .current-title").val()
               
-              premiered: selector(".video-detail .title .current-title").val()
+              premiered: selector(".panel-block>strong").val().delete(" ").equals("日期:").nth().val()
               release_date: selector(".panel-block>strong").val().delete(" ").equals("日期:").nth().val()
               
               # ID 字段
               imdb_id: selector(".video-detail .title strong").val()
+              tmdb_id: selector(".video-detail .title strong").val()
+              tvdb_id: selector(".video-detail .title strong").val()
               javdb_id: selector(".video-detail .title strong").val()
-              douban_id: selector(".video-detail .title strong").val()
               
               # 分类信息
               genres: selector(".panel-block>strong").val().delete(" ").equals("類別:").nth().selector(".value a").val()
@@ -46,9 +51,18 @@ nodes:
               certification: selector(".video-detail .title .current-title").val()
               
               # 艺术作品
-              posters: selector(".column-video-cover a img").attr("src")
+              posters: selector(".column-video-cover>a>img").attr("src")
               fanarts: selector(".tile-images .tile-item a").attr("href")
               thumbs: selector(".column-video-cover a img").attr("src")
+              preview_images: selector(".tile-images.preview-images .tile-item").attr("href")
+              
+              # TOP250 排名信息 (分别提取排名数字和类别)
+              ranking_numbers: selector(".control.ranking-tags .tags.has-addons .tag.is-dark").val()
+              ranking_categories: selector(".control.ranking-tags .tags.has-addons .tag.is-warning").val()
+              
+              # 电影系列/集合信息
+              series_name: selector(".panel-block>strong").val().delete(" ").equals("系列:").nth().val()
+              series_overview: selector(".panel-block>strong").val().delete(" ").equals("系列:").nth().selector(".value").val()
               
               # 其他字段
               custom_rating: selector(".video-detail .title .current-title").val()
