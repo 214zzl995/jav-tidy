@@ -1,3 +1,6 @@
+#![allow(clippy::result_large_err)] // CrawlerErr contains large pest::error
+#![allow(clippy::iter_cloned_collect)] // Template processing requires specific patterns
+
 use std::{
     collections::{HashMap, HashSet},
     marker::PhantomData,
@@ -30,6 +33,7 @@ where
 struct CrawlerNode {
     _script_raw: String,
     request: bool,
+    required: bool, // 新增：是否为必需字段
     children: Option<HashMap<String, CrawlerNode>>,
     script: CrawlerScript,
 }
@@ -44,6 +48,7 @@ struct WorkflowRoot {
 struct WorkflowNode {
     name: String,
     script: CrawlerScript,
+    required: bool,
     children: Vec<WorkflowNode>,
 }
 
@@ -216,20 +221,60 @@ impl WorkflowNode {
         root_element_refs: Vec<ElementRef<'_>>,
         runtime_variable: &mut RuntimeVariable,
     ) -> Result<(), CrawlerErr> {
+        log::debug!("处理节点 '{}', required={}, 输入元素数量={}", 
+            self.name, self.required, root_element_refs.len());
+        
+        if root_element_refs.is_empty() && self.required {
+            let error_msg = format!("必需节点 '{}' 接收到空的元素列表，这表明前置条件未满足", self.name);
+            log::error!("{}", error_msg);
+            return Err(CrawlerErr::Custom(format!("DATA_NOT_FOUND: {}", error_msg)));
+        }
+        
         match self.script.rule {
             Rule::element_access => {
-                let elements = self
+                let elements = match self
                     .script
-                    .get_elements(root_element_refs, runtime_variable)?;
+                    .get_elements(root_element_refs, runtime_variable)
+                {
+                    Ok(elements) => elements,
+                    Err(e) if !self.required => {
+                        log::debug!("非必需字段处理失败，使用空元素列表: {}", e);
+                        vec![]
+                    }
+                    Err(e) => {
+                        log::error!("必需字段 '{}' (element_access) 处理失败: {}", self.name, e);
+                        return Err(e);
+                    }
+                };
+
+                if elements.is_empty() && self.required {
+                    let error_msg = format!("必需节点 '{}' 未找到任何匹配的元素", self.name);
+                    log::error!("{}", error_msg);
+                    return Err(CrawlerErr::Custom(format!("DATA_NOT_FOUND: {}", error_msg)));
+                }
 
                 for node in &self.children {
                     node.process(elements.clone(), runtime_variable)?;
                 }
             }
             Rule::value_access => {
-                let values = self
-                    .script
-                    .get_values(root_element_refs, runtime_variable)?;
+                let values = match self.script.get_values(root_element_refs, runtime_variable) {
+                    Ok(values) => values,
+                    Err(e) if !self.required => {
+                        log::debug!("非必需字段处理失败，使用默认空字符串: {}", e);
+                        vec![String::new()]
+                    }
+                    Err(e) => {
+                        log::error!("必需字段 '{}' (value_access) 处理失败: {}", self.name, e);
+                        return Err(e);
+                    }
+                };
+
+                if self.required && (values.is_empty() || values.iter().all(|v| v.trim().is_empty())) {
+                    let error_msg = format!("必需节点 '{}' 未获取到有效的值", self.name);
+                    log::error!("{}", error_msg);
+                    return Err(CrawlerErr::Custom(format!("DATA_NOT_FOUND: {}", error_msg)));
+                }
 
                 if !runtime_variable.contains_key(&self.name) {
                     runtime_variable.insert(self.name.clone(), values.clone());
@@ -349,6 +394,8 @@ impl<'de> Deserialize<'de> for CrawlerNode {
                 script: String,
                 #[serde(default = "crate::default_false")]
                 request: bool,
+                #[serde(default = "crate::default_false")]
+                required: bool,
                 #[serde(default)]
                 children: Option<HashMap<String, CrawlerNode>>,
             },
@@ -357,13 +404,14 @@ impl<'de> Deserialize<'de> for CrawlerNode {
 
         let data = CrawlerNodeData::deserialize(deserializer)?;
 
-        let (script_raw, request, children) = match data {
+        let (script_raw, request, required, children) = match data {
             CrawlerNodeData::Complex {
                 script,
                 request,
+                required,
                 children,
-            } => (script, request, children),
-            CrawlerNodeData::Simple(script) => (script, false, None),
+            } => (script, request, required, children),
+            CrawlerNodeData::Simple(script) => (script, false, false, None),
         };
 
         let script = match CrawlerScript::new(&script_raw) {
@@ -383,6 +431,7 @@ impl<'de> Deserialize<'de> for CrawlerNode {
         Ok(CrawlerNode {
             _script_raw: script_raw,
             request,
+            required,
             children,
             script,
         })
@@ -408,7 +457,8 @@ impl From<WorkflowNodeWithName> for WorkflowNode {
     fn from(node: WorkflowNodeWithName) -> Self {
         WorkflowNode {
             name: node.0,
-            script: node.1.script,
+            script: node.1.script.clone(),
+            required: node.1.required,
             children: node.1.children.clone().map_or(vec![], |c| {
                 if node.1.request {
                     vec![]

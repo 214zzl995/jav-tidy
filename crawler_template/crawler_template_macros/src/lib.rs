@@ -26,11 +26,25 @@ pub fn derive_crawler(input: TokenStream) -> TokenStream {
         let field_type = &f.ty;
 
         let conversion_logic = match analyze_field_type(field_type) {
-            FieldType::Direct => quote! {
-                match map.get(#field_str).and_then(|v| v.first()) {
-                    Some(s) => <#field_type as std::str::FromStr>::from_str(s)
-                        .map_err(|_| #crawler_path::CrawlerParseError::ConversionFailed(#field_str))?,
-                    None => return Err(#crawler_path::CrawlerParseError::MissingField(#field_str)),
+            FieldType::Direct => {
+                // 对于直接类型，只有实现了FromStr的类型才支持缺失时使用默认值
+                // 对于String等类型，如果缺失则使用空字符串
+                let is_string_type = quote! { #field_type }.to_string().contains("String");
+                if is_string_type {
+                    quote! {
+                        match map.get(#field_str).and_then(|v| v.first()) {
+                            Some(s) => s.clone(),
+                            None => String::new(),
+                        }
+                    }
+                } else {
+                    quote! {
+                        match map.get(#field_str).and_then(|v| v.first()) {
+                            Some(s) => <#field_type as std::str::FromStr>::from_str(s)
+                                .map_err(|_| #crawler_path::CrawlerParseError::ConversionFailed(#field_str))?,
+                            None => return Err(#crawler_path::CrawlerParseError::MissingField(#field_str)),
+                        }
+                    }
                 }
             },
             FieldType::OptionDirect => {
@@ -155,18 +169,16 @@ fn extract_type_from_option_vec(ty: &syn::Type) -> syn::Type {
         if let Some(segment) = type_path.path.segments.first() {
             if segment.ident == "Option" {
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
-                        if let syn::Type::Path(inner_path) = inner_type {
-                            if let Some(inner_segment) = inner_path.path.segments.first() {
-                                if inner_segment.ident == "Vec" {
-                                    if let syn::PathArguments::AngleBracketed(inner_args) =
-                                        &inner_segment.arguments
+                    if let Some(syn::GenericArgument::Type(syn::Type::Path(inner_path))) = args.args.first() {
+                        if let Some(inner_segment) = inner_path.path.segments.first() {
+                            if inner_segment.ident == "Vec" {
+                                if let syn::PathArguments::AngleBracketed(inner_args) =
+                                    &inner_segment.arguments
+                                {
+                                    if let Some(syn::GenericArgument::Type(vec_inner_type)) =
+                                        inner_args.args.first()
                                     {
-                                        if let Some(syn::GenericArgument::Type(vec_inner_type)) =
-                                            inner_args.args.first()
-                                        {
-                                            return vec_inner_type.clone();
-                                        }
+                                        return vec_inner_type.clone();
                                     }
                                 }
                             }

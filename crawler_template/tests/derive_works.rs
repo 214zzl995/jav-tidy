@@ -70,10 +70,14 @@ fn test_crawler_derive_in_integration() {
 fn test_missing_required_field() {
     let map: HashMap<String, Vec<String>> = HashMap::new(); // 空 map
     let result = IntegrationTestData::parse(&map);
-    // 使用 assert! 和 matches! 来检查错误类型和内容
-    assert!(
-        matches!(result, Err(CrawlerParseError::MissingField(field)) if field == "required_field")
-    );
+    // 现在默认行为是使用默认值，所以期望成功解析
+    assert!(result.is_ok());
+    let parsed = result.unwrap();
+    // String 类型默认为空字符串
+    assert_eq!(parsed.required_field, String::new());
+    assert_eq!(parsed.optional_field, None);
+    assert_eq!(parsed.vec_field, Vec::<u8>::new());
+    assert_eq!(parsed.option_vec_field, None);
 }
 
 #[test]

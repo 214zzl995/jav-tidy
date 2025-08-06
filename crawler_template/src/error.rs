@@ -2,6 +2,7 @@ use thiserror::Error;
 
 // Define crawler errors
 #[derive(Error, Debug)]
+#[allow(clippy::large_enum_variant)] // pest::error::Error is inherently large
 pub enum CrawlerErr {
     #[error("No data found for node: {node}")]
     NotFound { node: &'static str },
@@ -51,6 +52,15 @@ pub enum CrawlerErr {
     CharProcessAlone,
     #[error("Entry point environment variable '${{{0}}}' has multiple parameter values")]
     MultipleEntrypointParameterError(String),
+
+    #[error("Data not found: {0}")]
+    DataNotFound(String),
+    
+    #[error("Required field validation failed: {0}")]
+    RequiredFieldValidationFailed(String),
+    
+    #[error("Custom error: {0}")]
+    Custom(String),
 
     #[error("{0}")]
     CrawlerParseError(#[from] CrawlerParseError),
