@@ -6,7 +6,7 @@ use structopt::StructOpt;
 pub struct StartParam {
     #[structopt(
         short = "c",
-        long = "conifg",
+        long = "config",
         parse(from_os_str),
         default_value = "config.toml"
     )]

@@ -67,8 +67,17 @@ impl SourceNotify {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
 
         // 创建观察器
+        log::info!("创建文件系统监控器...");
         let watcher = RecommendedWatcher::new(
             move |result: Result<Event, Error>| {
+                match &result {
+                    Ok(event) => {
+                        log::debug!("接收到文件系统事件: {:?}", event);
+                    }
+                    Err(e) => {
+                        log::error!("文件系统事件错误: {}", e);
+                    }
+                }
                 if let Err(e) = event_tx.send(result) {
                     log::warn!("发送文件事件失败: {}", e);
                 }
@@ -81,6 +90,8 @@ impl SourceNotify {
             .iter()
             .map(|ext| ext.to_lowercase())
             .collect();
+        
+        log::info!("配置监控文件扩展名: {:?}", allowed_extensions);
 
         let source_notify = SourceNotify {
             inner: Arc::new(SourceNotifyInner {
@@ -132,6 +143,9 @@ impl SourceNotify {
         let inner = Arc::clone(&self.inner);
         let config = EventHandlerConfig::default();
 
+        log::info!("启动文件事件处理器，批处理配置: 大小={}, 延迟={}ms", 
+                  config.batch_size, config.batch_delay_ms);
+
         tokio::spawn(async move {
             let mut pending_files = Vec::with_capacity(config.batch_size);
             let mut recent_files = std::collections::VecDeque::with_capacity(config.dedup_window);
@@ -149,6 +163,7 @@ impl SourceNotify {
 
                 // 处理收集到的文件
                 if !pending_files.is_empty() {
+                    log::debug!("处理文件批次，包含 {} 个文件", pending_files.len());
                     Self::process_file_batch(&return_tx, &mut pending_files).await;
                 }
 
@@ -180,6 +195,7 @@ impl SourceNotify {
 
             match tokio::time::timeout(remaining_time, event_rx.recv()).await {
                 Ok(Some(Ok(event))) => {
+                    log::debug!("处理文件系统事件: kind={:?}, paths={:?}", event.kind, event.paths);
                     Self::process_single_event(event, pending_files, recent_files, inner, config);
                 }
                 Ok(Some(Err(e))) => {
@@ -209,31 +225,43 @@ impl SourceNotify {
     ) {
         // 只处理文件创建事件
         if !matches!(event.kind, EventKind::Create(_)) {
+            log::debug!("忽略非创建事件: {:?}", event.kind);
             return;
         }
 
         for path in event.paths {
+            log::debug!("检查文件: {}", path.display());
+            
             // 基本过滤
             if !path.is_file() {
+                log::debug!("跳过非文件: {}", path.display());
                 continue;
             }
 
             #[cfg(target_os = "windows")]
             if is_recycle_bin(&path) {
+                log::debug!("跳过回收站文件: {}", path.display());
                 continue;
             }
 
             // 检查扩展名
             if !Self::is_allowed_file(&path, &inner.allowed_extensions) {
+                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    log::debug!("跳过不支持的文件扩展名 '{}': {}", ext, path.display());
+                } else {
+                    log::debug!("跳过无扩展名文件: {}", path.display());
+                }
                 continue;
             }
 
             // 去重检查
             if recent_files.contains(&path) {
+                log::debug!("跳过重复文件: {}", path.display());
                 continue;
             }
 
             // 添加到待处理列表
+            log::info!("发现新的待处理文件: {}", path.display());
             pending_files.push(path.clone());
 
             // 维护去重窗口
