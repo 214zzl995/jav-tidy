@@ -23,6 +23,17 @@ use tokio::sync::mpsc;
 
 type Templates = Arc<Vec<(String, Template<MovieNfoCrawler>)>>;
 
+/// 文件处理的依赖项集合
+struct ProcessingDependencies<'a> {
+    parser: &'a FileNameParser,
+    nfo_generator: &'a NfoGenerator,
+    file_organizer: &'a FileOrganizer,
+    image_manager: &'a ImageManager,
+    translator: Option<&'a Translator>,
+    templates: &'a Templates,
+    config: &'a AppConfig,
+}
+
 /// 文件处理锁，防止文件在处理过程中被其他进程操作
 pub struct FileProcessingLock {
     lock_path: PathBuf,
@@ -323,15 +334,19 @@ async fn process_file_queue(
         );
 
         // 处理单个文件
+        let deps = ProcessingDependencies {
+            parser: &parser,
+            nfo_generator: &nfo_generator,
+            file_organizer: &file_organizer,
+            image_manager: &image_manager,
+            translator: translator.as_ref(),
+            templates: &templates,
+            config: &config,
+        };
+        
         match process_single_file(
             &file_path,
-            &parser,
-            &nfo_generator,
-            &file_organizer,
-            &image_manager,
-            translator.as_ref(),
-            &templates,
-            &config,
+            &deps,
             &progress_bar,
         )
         .await
@@ -365,13 +380,7 @@ async fn process_file_queue(
 /// 处理单个文件（带文件保护机制）
 async fn process_single_file(
     file_path: &Path,
-    parser: &FileNameParser,
-    nfo_generator: &NfoGenerator,
-    file_organizer: &FileOrganizer,
-    image_manager: &ImageManager,
-    translator: Option<&Translator>,
-    templates: &Templates,
-    config: &AppConfig,
+    deps: &ProcessingDependencies<'_>,
     progress_bar: &ProgressBar,
 ) -> anyhow::Result<()> {
     progress_bar.set_message("获取文件锁...");
@@ -390,8 +399,8 @@ async fn process_single_file(
 
     progress_bar.set_message("解析文件名...");
 
-    let movie_id = parser
-        .extract_movie_id(file_path, config)
+    let movie_id = deps.parser
+        .extract_movie_id(file_path, deps.config)
         .ok_or_else(|| anyhow::anyhow!("无法从文件名提取影片ID"))?;
 
     log::info!("提取到影片ID: {}", movie_id);
@@ -406,8 +415,8 @@ async fn process_single_file(
     let crawler_data = match crawler(
         &movie_id,
         progress_bar,
-        templates.clone(),
-        &Arc::new(config.clone()),
+        deps.templates.clone(),
+        &Arc::new(deps.config.clone()),
     )
     .await
     {
@@ -429,10 +438,10 @@ async fn process_single_file(
 
     // 翻译影片数据（如果启用）
     let mut final_crawler_data = crawler_data.clone();
-    if let Some(translator) = translator {
+    if let Some(translator) = deps.translator {
         progress_bar.set_message("翻译影片内容...");
         
-        if let Err(e) = translator.translate_movie_data(&mut final_crawler_data, config).await {
+        if let Err(e) = translator.translate_movie_data(&mut final_crawler_data, deps.config).await {
             log::warn!("影片数据翻译失败: {}，继续使用原始数据", e);
             final_crawler_data = crawler_data.clone();
         } else {
@@ -444,28 +453,28 @@ async fn process_single_file(
 
     progress_bar.set_message("验证NFO数据...");
 
-    let warnings = nfo_generator.validate_nfo(&movie_nfo);
+    let warnings = deps.nfo_generator.validate_nfo(&movie_nfo);
     if !warnings.is_empty() {
         log::warn!("NFO数据验证警告: {:?}", warnings);
     }
 
     // 阶段4.5: 下载图片（如果启用）
-    if config.should_download_images() {
+    if deps.config.should_download_images() {
         progress_bar.set_message("下载影片图片...");
         
-        let output_dir = if file_organizer.needs_organization(file_path, config) {
+        let output_dir = if deps.file_organizer.needs_organization(file_path, deps.config) {
             // 预览组织后的目录结构
-            let (video_path, _) = file_organizer.preview_media_center_structure(file_path, &movie_nfo, config)?;
-            video_path.parent().unwrap_or(config.get_output_dir()).to_path_buf()
+            let (video_path, _) = deps.file_organizer.preview_media_center_structure(file_path, &movie_nfo, deps.config)?;
+            video_path.parent().unwrap_or(deps.config.get_output_dir()).to_path_buf()
         } else {
-            file_path.parent().unwrap_or(config.get_output_dir()).to_path_buf()
+            file_path.parent().unwrap_or(deps.config.get_output_dir()).to_path_buf()
         };
 
-        match image_manager.download_movie_images(
+        match deps.image_manager.download_movie_images(
             &final_crawler_data,
             &output_dir,
             &movie_id,
-            config,
+            deps.config,
         ).await {
             Ok(downloaded_images) => {
                 if !downloaded_images.is_empty() {
@@ -488,10 +497,10 @@ async fn process_single_file(
 
     let mut transaction = FileProcessingTransaction::new(file_path);
 
-    let (final_video_path, final_nfo_path) = if file_organizer.needs_organization(file_path, config)
+    let (final_video_path, final_nfo_path) = if deps.file_organizer.needs_organization(file_path, deps.config)
     {
         let (video_path, nfo_path) =
-            file_organizer.preview_media_center_structure(file_path, &movie_nfo, config)?;
+            deps.file_organizer.preview_media_center_structure(file_path, &movie_nfo, deps.config)?;
 
         transaction.add_file_move(file_path.to_path_buf(), video_path.clone());
 
@@ -518,15 +527,15 @@ async fn process_single_file(
         .commit()
         .with_context(|| format!("文件处理事务失败: {}", file_path.display()))?;
 
-    if config.migrate_subtitles() {
+    if deps.config.migrate_subtitles() {
         progress_bar.set_message("处理字幕文件...");
         
         if let Some(input_dir) = file_path.parent() {
-            match file_organizer.migrate_subtitle_files(
+            match deps.file_organizer.migrate_subtitle_files(
                 &movie_id,
                 input_dir,
                 &final_video_path,
-                config,
+                deps.config,
             ) {
                 Ok(migrated_subtitles) => {
                     if !migrated_subtitles.is_empty() {
@@ -550,10 +559,10 @@ async fn process_single_file(
     if movie_nfo.actors.len() > 1 {
         progress_bar.set_message("处理多演员链接...");
         
-        match file_organizer.handle_multi_actor_links(
+        match deps.file_organizer.handle_multi_actor_links(
             file_path,
             &movie_nfo,
-            config,
+            deps.config,
             &final_video_path,
             &final_nfo_path,
         ) {
@@ -668,7 +677,7 @@ fn calculate_data_quality(nfo: &MovieNfoCrawler) -> u32 {
     
     // 其他信息权重
     if !nfo.fanarts.is_empty() { score += 5; }
-    if nfo.original_title.as_ref().map_or(false, |t| !t.is_empty()) { score += 5; }
+    if nfo.original_title.as_ref().is_some_and(|t| !t.is_empty()) { score += 5; }
     
     score
 }

@@ -47,16 +47,20 @@ pub enum TranslationProvider {
     Custom(String), // 自定义 API 端点
 }
 
-impl TranslationProvider {
-    pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
+impl std::str::FromStr for TranslationProvider {
+    type Err = ();
+    
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.to_lowercase().as_str() {
             "openai" => TranslationProvider::OpenAI,
             "ollama" => TranslationProvider::Ollama,
             url if url.starts_with("http") => TranslationProvider::Custom(url.to_string()),
             _ => TranslationProvider::OpenAI, // 默认
-        }
+        })
     }
+}
 
+impl TranslationProvider {
     pub fn get_base_url(&self) -> &str {
         match self {
             TranslationProvider::OpenAI => "https://api.openai.com/v1",
@@ -142,7 +146,7 @@ impl Translator {
 
     pub fn from_app_config(app_config: &AppConfig) -> Result<Self> {
         let translation_config = TranslationConfig {
-            provider: TranslationProvider::from_str(app_config.get_translation_provider()),
+            provider: app_config.get_translation_provider().parse().unwrap_or(TranslationProvider::OpenAI),
             api_key: app_config.get_translation_api_key().clone(),
             model: app_config.get_translation_model().to_string(),
             target_language: app_config.get_translation_target_language().to_string(),
@@ -727,16 +731,16 @@ mod tests {
     #[test]
     fn test_translation_provider() {
         assert!(matches!(
-            TranslationProvider::from_str("openai"),
+            "openai".parse().unwrap(),
             TranslationProvider::OpenAI
         ));
         
         assert!(matches!(
-            TranslationProvider::from_str("ollama"),
+            "ollama".parse().unwrap(),
             TranslationProvider::Ollama
         ));
         
-        if let TranslationProvider::Custom(url) = TranslationProvider::from_str("http://localhost:8080") {
+        if let TranslationProvider::Custom(url) = "http://localhost:8080".parse().unwrap() {
             assert_eq!(url, "http://localhost:8080");
         } else {
             panic!("Custom provider not parsed correctly");

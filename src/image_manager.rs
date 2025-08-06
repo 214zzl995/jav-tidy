@@ -17,8 +17,10 @@ pub enum ImageType {
     /// 缩略图
     Thumb,
     /// 预览图集
+    #[allow(dead_code)]
     Preview,
     /// 演员头像
+    #[allow(dead_code)]
     ActorThumb(String), // 演员名称
 }
 
@@ -26,6 +28,7 @@ pub enum ImageType {
 #[derive(Debug, Clone)]
 pub struct ImageNamingRule {
     pub filename: String,
+    #[allow(dead_code)]
     pub description: String,
 }
 
@@ -292,6 +295,7 @@ impl ImageManager {
     }
 
     /// 检查图片是否已存在且有效
+    #[allow(dead_code)]
     pub async fn is_image_valid(&self, path: &Path) -> bool {
         if !path.exists() {
             return false;
@@ -309,7 +313,7 @@ impl ImageManager {
         // 简单检查文件头是否为图片格式
         if let Ok(mut file) = fs::File::open(path).await {
             let mut buffer = [0; 4];
-            if let Ok(_) = tokio::io::AsyncReadExt::read_exact(&mut file, &mut buffer).await {
+            if (tokio::io::AsyncReadExt::read_exact(&mut file, &mut buffer).await).is_ok() {
                 // 检查常见图片格式的文件头
                 return match buffer {
                     [0xFF, 0xD8, 0xFF, _] => true, // JPEG
@@ -325,6 +329,7 @@ impl ImageManager {
     }
 
     /// 清理无效或损坏的图片文件
+    #[allow(dead_code)]
     pub async fn cleanup_invalid_images(&self, dir: &Path) -> Result<Vec<PathBuf>> {
         let mut removed_files = Vec::new();
         
@@ -337,14 +342,12 @@ impl ImageManager {
             let path = entry.path();
             if path.is_file() {
                 if let Some(ext) = path.extension() {
-                    if matches!(ext.to_str(), Some("jpg") | Some("jpeg") | Some("png") | Some("gif") | Some("bmp")) {
-                        if !self.is_image_valid(&path).await {
-                            log::warn!("发现无效图片文件，准备删除: {}", path.display());
-                            if let Err(e) = fs::remove_file(&path).await {
-                                log::error!("删除无效图片失败: {}", e);
-                            } else {
-                                removed_files.push(path);
-                            }
+                    if matches!(ext.to_str(), Some("jpg") | Some("jpeg") | Some("png") | Some("gif") | Some("bmp")) && !self.is_image_valid(&path).await {
+                        log::warn!("发现无效图片文件，准备删除: {}", path.display());
+                        if let Err(e) = fs::remove_file(&path).await {
+                            log::error!("删除无效图片失败: {}", e);
+                        } else {
+                            removed_files.push(path);
                         }
                     }
                 }

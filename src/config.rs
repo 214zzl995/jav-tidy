@@ -281,6 +281,7 @@ fn default_translate_tags() -> bool {
 }
 
 /// 默认标签合并：启用
+#[allow(dead_code)]
 fn default_enable_tag_merging() -> bool {
     true
 }
@@ -527,6 +528,7 @@ impl AppConfig {
     }
 
     /// 获取图片下载超时时间（秒）
+    #[allow(dead_code)]
     pub fn get_image_download_timeout(&self) -> u64 {
         self.image.timeout
     }
